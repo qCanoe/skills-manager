@@ -1,0 +1,83 @@
+:root {
+  /* Apple Light Mode Palette */
+  --bg: #f5f5f7; /* System Gray 6 Light */
+  --bg-panel: #ffffff; /* System Background Light */
+  --bg-elevated: #ffffff;
+  
+  /* Translucent Overlays */
+  --bg-soft: rgba(0, 0, 0, 0.05);
+  --bg-strong: rgba(0, 0, 0, 0.08);
+  --bg-hover: rgba(0, 0, 0, 0.06);
+  --bg-active: rgba(0, 0, 0, 0.1);
+
+  /* Monochrome Accents */
+  --accent: #000000;
+  --accent-soft: rgba(0, 0, 0, 0.05);
+  --accent-strong: #1c1c1e;
+  --accent-selected: rgba(0, 0, 0, 0.1);
+
+  /* Borders */
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.15);
+  --border-accent: rgba(0, 0, 0, 0.25);
+
+  /* Text */
+  --text: #000000;
+  --text-muted: #3c3c43; /* System Gray 1 Light */
+  --text-faint: #8e8e93; /* System Gray Light */
+
+  /* States (kept minimal/monochrome unless explicitly needed) */
+  --success: #34c759; /* Apple Green Light */
+  --success-soft: rgba(52, 199, 89, 0.1);
+  --danger: #ff3b30; /* Apple Red Light */
+  --danger-soft: rgba(255, 59, 48, 0.1);
+
+  /* Shadows (Soft, Apple-style drop shadows) */
+  --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.05) inset;
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.05);
+
+  /* Radii (Apple standard curves) */
+  --radius-xl: 18px;
+  --radius-lg: 12px;
+  --radius-md: 8px;
+  --radius-sm: 6px;
+
+  /* Typography */
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+}
+
+/* ── Dark Mode ────────────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1c1e;
+    --bg-panel: #2c2c2e;
+    --bg-elevated: #3a3a3c;
+
+    --bg-soft: rgba(255, 255, 255, 0.06);
+    --bg-strong: rgba(255, 255, 255, 0.10);
+    --bg-hover: rgba(255, 255, 255, 0.07);
+    --bg-active: rgba(255, 255, 255, 0.12);
+
+    --accent: #ffffff;
+    --accent-soft: rgba(255, 255, 255, 0.05);
+    --accent-strong: #f5f5f7;
+    --accent-selected: rgba(255, 255, 255, 0.12);
+
+    --border: rgba(255, 255, 255, 0.10);
+    --border-strong: rgba(255, 255, 255, 0.18);
+    --border-accent: rgba(255, 255, 255, 0.30);
+
+    --text: #ffffff;
+    --text-muted: #ebebf5;
+    --text-faint: #8e8e93;
+
+    --success: #30d158; /* Apple Green Dark */
+    --success-soft: rgba(48, 209, 88, 0.12);
+    --danger: #ff453a; /* Apple Red Dark */
+    --danger-soft: rgba(255, 69, 58, 0.15);
+
+    --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+    --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  }
+}

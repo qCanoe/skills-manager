@@ -55,19 +55,42 @@ struct SaveSkillRequest {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct SyncSkillRequest {
+struct CopySkillRequest {
   source_skill_dir: String,
   relative_path: String,
   target_source: SourceConfig,
-  conflict_strategy: String,
+  target_relative_path: String,
+  conflict_strategy: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CopySourceRequest {
+  source: SourceConfig,
+  target_source: SourceConfig,
+  conflict_strategy: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SyncSkillResult {
-  final_skill_dir: String,
+struct CopySkillResult {
+  status: String,
+  final_skill_dir: Option<String>,
   final_relative_path: String,
   skipped: bool,
+  conflict_message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CopySourceResult {
+  status: String,
+  copied_count: usize,
+  skipped_count: usize,
+  overwritten_count: usize,
+  renamed_count: usize,
+  conflict_count: usize,
+  conflict_relative_paths: Vec<String>,
 }
 
 fn home_join(parts: &[&str]) -> Result<String, String> {
@@ -84,7 +107,7 @@ fn get_default_sources() -> Result<Vec<SourceConfig>, String> {
   Ok(vec![
     SourceConfig {
       id: "cursor-personal".into(),
-      label: "Cursor / Personal".into(),
+      label: "Cursor".into(),
       root_path: home_join(&[".cursor", "skills"])?,
       writable: true,
       kind: "cursor".into(),
@@ -92,18 +115,10 @@ fn get_default_sources() -> Result<Vec<SourceConfig>, String> {
     },
     SourceConfig {
       id: "codex-personal".into(),
-      label: "Codex / Personal".into(),
+      label: "Codex".into(),
       root_path: home_join(&[".codex", "skills"])?,
       writable: true,
       kind: "codex".into(),
-      enabled: true,
-    },
-    SourceConfig {
-      id: "cursor-builtins".into(),
-      label: "Cursor / Built-in".into(),
-      root_path: home_join(&[".cursor", "skills-cursor"])?,
-      writable: false,
-      kind: "builtin".into(),
       enabled: true,
     },
   ])
@@ -193,9 +208,9 @@ fn save_skill(request: SaveSkillRequest) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn sync_skill(request: SyncSkillRequest) -> Result<SyncSkillResult, String> {
+fn copy_skill(request: CopySkillRequest) -> Result<CopySkillResult, String> {
   if !request.target_source.writable {
-    return Err("目标来源是只读的，无法同步。".into());
+    return Err("目标来源是只读的，无法复制。".into());
   }
 
   let source_dir = PathBuf::from(&request.source_skill_dir);
@@ -203,54 +218,137 @@ fn sync_skill(request: SyncSkillRequest) -> Result<SyncSkillResult, String> {
     return Err("源 Skill 目录不存在。".into());
   }
 
-  let relative_file = sanitize_relative_path(&request.relative_path)?;
-  ensure_skill_file_path(&relative_file)?;
+  let source_relative_file = sanitize_relative_path(&request.relative_path)?;
+  ensure_skill_file_path(&source_relative_file)?;
+  let target_relative_file = sanitize_relative_path(&request.target_relative_path)?;
+  ensure_skill_file_path(&target_relative_file)?;
 
-  let Some(relative_dir) = relative_file.parent() else {
-    return Err("Skill 路径无效。".into());
-  };
+  let target_root = PathBuf::from(&request.target_source.root_path);
+  fs::create_dir_all(&target_root).map_err(|err| format!("创建目标根目录失败：{err}"))?;
+  let inspection = inspect_copy_target(&source_dir, &target_relative_file, &target_root)?;
+
+  if request.conflict_strategy.is_none() {
+    if let Some(conflict) = inspection.conflict {
+      return Ok(CopySkillResult {
+        status: "conflict".into(),
+        final_skill_dir: None,
+        final_relative_path: conflict.final_relative_path,
+        skipped: false,
+        conflict_message: Some(conflict.message),
+      });
+    }
+  }
+
+  let strategy = request.conflict_strategy.as_deref().unwrap_or("skip");
+  let outcome = copy_skill_directory(&source_dir, &target_relative_file, &target_root, strategy)?;
+
+  Ok(CopySkillResult {
+    status: "copied".into(),
+    final_skill_dir: Some(outcome.final_skill_dir.to_string_lossy().to_string()),
+    final_relative_path: outcome.final_relative_path,
+    skipped: matches!(outcome.status, CopyStatus::Skipped),
+    conflict_message: None,
+  })
+}
+
+#[tauri::command]
+fn copy_source(request: CopySourceRequest) -> Result<CopySourceResult, String> {
+  if !request.target_source.writable {
+    return Err("目标来源是只读的，无法复制。".into());
+  }
+
+  if is_same_path(&request.source.root_path, &request.target_source.root_path) {
+    return Err("源来源与目标来源路径相同，无法复制。".into());
+  }
+
+  let source_root = PathBuf::from(&request.source.root_path);
+  if !source_root.exists() || !source_root.is_dir() {
+    return Err("源来源目录不存在。".into());
+  }
 
   let target_root = PathBuf::from(&request.target_source.root_path);
   fs::create_dir_all(&target_root).map_err(|err| format!("创建目标根目录失败：{err}"))?;
 
-  let mut target_dir = target_root.join(relative_dir);
-  if target_dir.exists() {
-    let existing_relative_path = target_dir
-      .join("SKILL.md")
-      .strip_prefix(&target_root)
-      .map(normalize_relative_path)
-      .unwrap_or_else(|_| "SKILL.md".into());
+  let mut skill_paths = Vec::new();
+  for entry in WalkDir::new(&source_root)
+    .into_iter()
+    .filter_entry(|entry| entry.file_name() != OsStr::new(".git"))
+    .filter_map(Result::ok)
+  {
+    if !entry.file_type().is_file() {
+      continue;
+    }
 
-    match request.conflict_strategy.as_str() {
-      "skip" => {
-        return Ok(SyncSkillResult {
-          final_skill_dir: target_dir.to_string_lossy().to_string(),
-          final_relative_path: existing_relative_path,
-          skipped: true,
-        })
-      }
-      "overwrite" => {
-        fs::remove_dir_all(&target_dir).map_err(|err| format!("覆盖旧 Skill 失败：{err}"))?;
-      }
-      "rename" => {
-        target_dir = unique_copy_path(&target_dir);
-      }
-      _ => return Err("未知的冲突处理策略。".into()),
+    if !entry.file_name().to_string_lossy().eq_ignore_ascii_case("SKILL.md") {
+      continue;
+    }
+
+    let relative = entry
+      .path()
+      .strip_prefix(&source_root)
+      .map_err(|err| format!("读取来源路径失败：{err}"))?;
+
+    skill_paths.push(relative.to_path_buf());
+  }
+
+  skill_paths.sort();
+
+  let mut conflict_paths = Vec::new();
+  for relative_path in &skill_paths {
+    let source_skill_dir = source_root.join(skill_relative_dir(relative_path)?);
+    let inspection = inspect_copy_target(&source_skill_dir, relative_path, &target_root)?;
+    if let Some(conflict) = inspection.conflict {
+      conflict_paths.push(conflict.final_relative_path);
     }
   }
 
-  copy_directory(&source_dir, &target_dir)?;
-  let final_relative_path = target_dir
-    .join("SKILL.md")
-    .strip_prefix(&target_root)
-    .map(normalize_relative_path)
-    .unwrap_or_else(|_| "SKILL.md".into());
+  if request.conflict_strategy.is_none() && !conflict_paths.is_empty() {
+    return Ok(CopySourceResult {
+      status: "conflict".into(),
+      copied_count: 0,
+      skipped_count: 0,
+      overwritten_count: 0,
+      renamed_count: 0,
+      conflict_count: conflict_paths.len(),
+      conflict_relative_paths: conflict_paths,
+    });
+  }
 
-  Ok(SyncSkillResult {
-    final_skill_dir: target_dir.to_string_lossy().to_string(),
-    final_relative_path,
-    skipped: false,
-  })
+  let strategy = request.conflict_strategy.as_deref().unwrap_or("skip");
+  let mut result = CopySourceResult {
+    status: "copied".into(),
+    copied_count: 0,
+    skipped_count: 0,
+    overwritten_count: 0,
+    renamed_count: 0,
+    conflict_count: 0,
+    conflict_relative_paths: Vec::new(),
+  };
+
+  for relative_path in skill_paths {
+    let source_skill_dir = source_root.join(skill_relative_dir(&relative_path)?);
+
+    let outcome = copy_skill_directory(&source_skill_dir, &relative_path, &target_root, strategy)?;
+
+    match outcome.status {
+      CopyStatus::Copied => {
+        result.copied_count += 1;
+      }
+      CopyStatus::Skipped => {
+        result.skipped_count += 1;
+      }
+      CopyStatus::Overwritten => {
+        result.copied_count += 1;
+        result.overwritten_count += 1;
+      }
+      CopyStatus::Renamed => {
+        result.copied_count += 1;
+        result.renamed_count += 1;
+      }
+    }
+  }
+
+  Ok(result)
 }
 
 #[tauri::command]
@@ -346,6 +444,204 @@ fn normalize_relative_path(path: &Path) -> String {
     .join("/")
 }
 
+#[derive(Debug, Clone, Copy)]
+enum CopyStatus {
+  Copied,
+  Skipped,
+  Overwritten,
+  Renamed,
+}
+
+#[derive(Debug, Clone)]
+struct CopyOutcome {
+  final_skill_dir: PathBuf,
+  final_relative_path: String,
+  status: CopyStatus,
+}
+
+#[derive(Debug, Clone)]
+struct CopyConflict {
+  final_relative_path: String,
+  message: String,
+}
+
+#[derive(Debug, Clone)]
+struct CopyInspection {
+  conflict: Option<CopyConflict>,
+}
+
+fn inspect_copy_target(
+  source_dir: &Path,
+  relative_file: &Path,
+  target_root: &Path,
+) -> Result<CopyInspection, String> {
+  let relative_dir = skill_relative_dir(relative_file)?;
+  let target_dir = target_root.join(relative_dir);
+  let final_relative_path = target_dir
+    .join("SKILL.md")
+    .strip_prefix(target_root)
+    .map(normalize_relative_path)
+    .unwrap_or_else(|_| "SKILL.md".into());
+
+  if is_same_path(source_dir, &target_dir) {
+    return Ok(CopyInspection {
+      conflict: Some(CopyConflict {
+        final_relative_path,
+        message: "目标路径与源 Skill 相同，请修改目标路径或选择其他来源。".into(),
+      }),
+    });
+  }
+
+  ensure_paths_do_not_overlap(source_dir, &target_dir)?;
+
+  if target_dir.exists() {
+    return Ok(CopyInspection {
+      conflict: Some(CopyConflict {
+        final_relative_path,
+        message: "目标路径中已存在同名 skill。".into(),
+      }),
+    });
+  }
+
+  Ok(CopyInspection { conflict: None })
+}
+
+fn copy_skill_directory(
+  source_dir: &Path,
+  relative_file: &Path,
+  target_root: &Path,
+  conflict_strategy: &str,
+) -> Result<CopyOutcome, String> {
+  let relative_dir = skill_relative_dir(relative_file)?;
+
+  let initial_target_dir = target_root.join(relative_dir);
+
+  if is_same_path(source_dir, &initial_target_dir) {
+    match conflict_strategy {
+      "skip" => {
+        let final_relative_path = initial_target_dir
+          .join("SKILL.md")
+          .strip_prefix(target_root)
+          .map(normalize_relative_path)
+          .unwrap_or_else(|_| "SKILL.md".into());
+
+        return Ok(CopyOutcome {
+          final_skill_dir: initial_target_dir,
+          final_relative_path,
+          status: CopyStatus::Skipped,
+        });
+      }
+      "overwrite" => {
+        return Err("目标路径与源 Skill 相同，无法覆盖自身。".into());
+      }
+      "rename" => {}
+      _ => return Err("未知的冲突处理策略。".into()),
+    }
+  }
+
+  let mut target_dir = initial_target_dir.clone();
+  let mut status = CopyStatus::Copied;
+
+  if target_dir.exists() {
+    let existing_relative_path = target_dir
+      .join("SKILL.md")
+      .strip_prefix(target_root)
+      .map(normalize_relative_path)
+      .unwrap_or_else(|_| "SKILL.md".into());
+
+    match conflict_strategy {
+      "skip" => {
+        return Ok(CopyOutcome {
+          final_skill_dir: target_dir,
+          final_relative_path: existing_relative_path,
+          status: CopyStatus::Skipped,
+        });
+      }
+      "overwrite" => {
+        ensure_paths_do_not_overlap(source_dir, &target_dir)?;
+        fs::remove_dir_all(&target_dir).map_err(|err| format!("覆盖旧 Skill 失败：{err}"))?;
+        status = CopyStatus::Overwritten;
+      }
+      "rename" => {
+        target_dir = unique_copy_path(&target_dir);
+        status = CopyStatus::Renamed;
+      }
+      _ => return Err("未知的冲突处理策略。".into()),
+    }
+  }
+
+  ensure_paths_do_not_overlap(source_dir, &target_dir)?;
+  copy_directory(source_dir, &target_dir)?;
+
+  let final_relative_path = target_dir
+    .join("SKILL.md")
+    .strip_prefix(target_root)
+    .map(normalize_relative_path)
+    .unwrap_or_else(|_| "SKILL.md".into());
+
+  Ok(CopyOutcome {
+    final_skill_dir: target_dir,
+    final_relative_path,
+    status,
+  })
+}
+
+fn skill_relative_dir(relative_file: &Path) -> Result<&Path, String> {
+  let Some(relative_dir) = relative_file.parent() else {
+    return Err("暂不支持复制位于来源根目录的 SKILL.md，请先将其放入单独文件夹。".into());
+  };
+
+  if relative_dir.as_os_str().is_empty() {
+    return Err("暂不支持复制位于来源根目录的 SKILL.md，请先将其放入单独文件夹。".into());
+  }
+
+  Ok(relative_dir)
+}
+
+fn ensure_paths_do_not_overlap(source_dir: &Path, target_dir: &Path) -> Result<(), String> {
+  if is_same_or_nested_path(source_dir, target_dir) {
+    return Err("目标路径位于源 Skill 内部，无法复制到自身子目录。".into());
+  }
+
+  if is_same_or_nested_path(target_dir, source_dir) {
+    return Err("目标路径会覆盖源 Skill 的父级目录，已阻止本次复制。".into());
+  }
+
+  Ok(())
+}
+
+fn is_same_path(left: impl AsRef<Path>, right: impl AsRef<Path>) -> bool {
+  comparable_path(left.as_ref()) == comparable_path(right.as_ref())
+}
+
+fn is_same_or_nested_path(base: &Path, candidate: &Path) -> bool {
+  let base_parts = comparable_parts(base);
+  let candidate_parts = comparable_parts(candidate);
+
+  candidate_parts.len() >= base_parts.len()
+    && candidate_parts
+      .iter()
+      .zip(base_parts.iter())
+      .all(|(candidate_part, base_part)| candidate_part == base_part)
+}
+
+fn comparable_parts(path: &Path) -> Vec<String> {
+  path
+    .components()
+    .filter_map(|component| match component {
+      Component::Prefix(prefix) => Some(prefix.as_os_str().to_string_lossy().to_lowercase()),
+      Component::RootDir => Some(String::new()),
+      Component::Normal(part) => Some(part.to_string_lossy().to_lowercase()),
+      Component::CurDir => None,
+      Component::ParentDir => Some("..".into()),
+    })
+    .collect()
+}
+
+fn comparable_path(path: &Path) -> String {
+  comparable_parts(path).join("/")
+}
+
 fn unique_copy_path(original: &Path) -> PathBuf {
   let parent = original.parent().map(Path::to_path_buf).unwrap_or_default();
   let stem = original
@@ -393,6 +689,117 @@ fn copy_directory(source_dir: &Path, target_dir: &Path) -> Result<(), String> {
   }
 
   Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use std::time::{SystemTime, UNIX_EPOCH};
+
+  fn temp_path(name: &str) -> PathBuf {
+    let unique = SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .expect("time works")
+      .as_nanos();
+
+    std::env::temp_dir().join(format!("skills-manager-{name}-{unique}"))
+  }
+
+  #[test]
+  fn copy_skill_directory_copies_to_target_root() {
+    let workspace = temp_path("copy-skill");
+    let source_root = workspace.join("source");
+    let source_dir = source_root.join("alpha");
+    let target_root = workspace.join("target");
+
+    fs::create_dir_all(&source_dir).expect("create source");
+    fs::create_dir_all(&target_root).expect("create target");
+    fs::write(source_dir.join("SKILL.md"), "# alpha").expect("write skill");
+    fs::write(source_dir.join("notes.txt"), "extra").expect("write extra");
+
+    let result = copy_skill_directory(
+      &source_dir,
+      Path::new("alpha/SKILL.md"),
+      &target_root,
+      "rename",
+    )
+    .expect("copy succeeds");
+
+    assert!(matches!(result.status, CopyStatus::Copied));
+    assert_eq!(result.final_relative_path, "alpha/SKILL.md");
+    assert!(target_root.join("alpha/SKILL.md").exists());
+    assert!(target_root.join("alpha/notes.txt").exists());
+
+    let _ = fs::remove_dir_all(workspace);
+  }
+
+  #[test]
+  fn copy_skill_directory_renames_on_conflict() {
+    let workspace = temp_path("copy-rename");
+    let source_root = workspace.join("source");
+    let source_dir = source_root.join("alpha");
+    let target_root = workspace.join("target");
+    let target_dir = target_root.join("alpha");
+
+    fs::create_dir_all(&source_dir).expect("create source");
+    fs::create_dir_all(&target_dir).expect("create target");
+    fs::write(source_dir.join("SKILL.md"), "# alpha").expect("write source skill");
+    fs::write(target_dir.join("SKILL.md"), "# existing").expect("write target skill");
+
+    let result = copy_skill_directory(
+      &source_dir,
+      Path::new("alpha/SKILL.md"),
+      &target_root,
+      "rename",
+    )
+    .expect("copy succeeds");
+
+    assert!(matches!(result.status, CopyStatus::Renamed));
+    assert_eq!(result.final_relative_path, "alpha-copy/SKILL.md");
+    assert!(target_root.join("alpha-copy/SKILL.md").exists());
+
+    let _ = fs::remove_dir_all(workspace);
+  }
+
+  #[test]
+  fn copy_skill_directory_blocks_self_overwrite() {
+    let workspace = temp_path("copy-self");
+    let source_root = workspace.join("source");
+    let source_dir = source_root.join("alpha");
+
+    fs::create_dir_all(&source_dir).expect("create source");
+    fs::write(source_dir.join("SKILL.md"), "# alpha").expect("write skill");
+
+    let error = copy_skill_directory(
+      &source_dir,
+      Path::new("alpha/SKILL.md"),
+      &source_root,
+      "overwrite",
+    )
+    .expect_err("self overwrite must fail");
+
+    assert!(error.contains("无法覆盖自身"));
+
+    let _ = fs::remove_dir_all(workspace);
+  }
+
+  #[test]
+  fn copy_skill_directory_rejects_root_level_skill() {
+    let workspace = temp_path("copy-root");
+    let source_root = workspace.join("source");
+    let target_root = workspace.join("target");
+
+    fs::create_dir_all(&source_root).expect("create source");
+    fs::create_dir_all(&target_root).expect("create target");
+    fs::write(source_root.join("SKILL.md"), "# root").expect("write skill");
+
+    let error = copy_skill_directory(&source_root, Path::new("SKILL.md"), &target_root, "rename")
+      .expect_err("root level skill must fail");
+
+    assert!(error.contains("来源根目录"));
+
+    let _ = fs::remove_dir_all(workspace);
+  }
 }
 
 fn position_bottom_right(app: &AppHandle) {
@@ -501,7 +908,8 @@ pub fn run() {
       get_default_sources,
       scan_skills,
       save_skill,
-      sync_skill,
+      copy_skill,
+      copy_source,
       open_path
     ])
     .run(tauri::generate_context!())

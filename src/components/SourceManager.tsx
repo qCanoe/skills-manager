@@ -1,4 +1,4 @@
-import { ChevronDown, FolderPlus, Layers, Trash2, X } from 'lucide-react'
+import { ChevronDown, CopyPlus, FolderPlus, Layers, Trash2, X } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 
 import { getSourceBadge } from '../lib/sources'
@@ -10,7 +10,8 @@ interface SourceManagerProps {
   skills: SkillRecord[]
   onSelectSource: (sourceId: string) => void
   onToggleSource: (sourceId: string) => void
-  onAddCustomSource: (label: string, path: string, writable: boolean) => void
+  onAddCustomSource: (label: string, path: string, writable: boolean) => boolean
+  onCopySource: (source: SourceConfig) => void
   onRemoveSource: (sourceId: string) => void
 }
 
@@ -21,6 +22,7 @@ export function SourceManager({
   onSelectSource,
   onToggleSource,
   onAddCustomSource,
+  onCopySource,
   onRemoveSource,
 }: SourceManagerProps) {
   const [collapsed, setCollapsed] = useState(false)
@@ -34,7 +36,9 @@ export function SourceManager({
     event.preventDefault()
     if (!label.trim() || !path.trim()) return
 
-    onAddCustomSource(label, path, writable)
+    const added = onAddCustomSource(label, path, writable)
+    if (!added) return
+
     setLabel('')
     setPath('')
     setWritable(true)
@@ -93,11 +97,22 @@ export function SourceManager({
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {sources.map((source) => (
-            <div
-              key={source.id}
-              className={`source-row-item ${activeSourceId === source.id ? 'is-selected' : ''} ${!source.enabled ? 'is-disabled' : ''}`}
-            >
+          {sources.map((source) => {
+            const sourceSkills = skills.filter((skill) => skill.sourceId === source.id)
+            const hasRootLevelSkill = sourceSkills.some((skill) => !skill.relativePath.includes('/'))
+            const isCopyDisabled = sourceSkills.length === 0 || hasRootLevelSkill
+            const copyTitle =
+              sourceSkills.length === 0
+                ? '当前来源没有可复制的 skill'
+                : hasRootLevelSkill
+                  ? '当前来源包含位于根目录的 SKILL.md，请先整理到单独文件夹'
+                  : `复制 ${source.label} 中的全部 skills`
+
+            return (
+              <div
+                key={source.id}
+                className={`source-row-item ${activeSourceId === source.id ? 'is-selected' : ''} ${!source.enabled ? 'is-disabled' : ''}`}
+              >
               <button
                 className="source-row-item__label"
                 style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}
@@ -109,6 +124,17 @@ export function SourceManager({
               </button>
 
               <div className="source-row-item__controls">
+                <button
+                  className="tiny-toggle"
+                  disabled={isCopyDisabled}
+                  onClick={() => onCopySource(source)}
+                  type="button"
+                  title={copyTitle}
+                >
+                  <CopyPlus size={12} />
+                  复制
+                </button>
+
                 <button
                   className={`tiny-toggle ${source.enabled ? 'is-active' : ''}`}
                   onClick={() => onToggleSource(source.id)}
@@ -148,8 +174,9 @@ export function SourceManager({
                   )
                 ) : null}
               </div>
-            </div>
-          ))}
+              </div>
+            )
+          })}
         </div>
 
         <div style={{ padding: '8px 0 0' }}>

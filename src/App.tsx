@@ -4,22 +4,61 @@ import { AlertTriangle, LoaderCircle, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, useDeferredValue } from 'react'
 
 import './styles/app.css'
+import { CopyConflictDialog } from './components/CopyConflictDialog'
+import { CopyDialog } from './components/CopyDialog'
+import { CopySourceDialog } from './components/CopySourceDialog'
 import { CommandBar } from './components/CommandBar'
 import { EmptyState } from './components/EmptyState'
 import { SkillEditor } from './components/SkillEditor'
 import { SkillList } from './components/SkillList'
 import { SkillPreview } from './components/SkillPreview'
 import { SourceManager } from './components/SourceManager'
-import { SyncDialog } from './components/SyncDialog'
+import { ToastContainer, type ToastMessage } from './components/Toast'
 import { normalizeSkills } from './lib/skills'
-import { createCustomSource, loadStoredSources, normalizePathInput, persistSources } from './lib/sources'
+import { createCustomSource, isSameSourcePath, loadStoredSources, normalizePathInput, persistSources } from './lib/sources'
 import { loadActiveSource, loadWritableOnly, persistActiveSource, persistWritableOnly } from './lib/ui-state'
-import type { RawSkillRecord, SkillRecord, SourceConfig, SyncConflictStrategy } from './types'
+import type {
+  CopyConflictStrategy,
+  CopySkillRequest,
+  CopySourceResult,
+  CopySourceRequest,
+  CopySkillResult,
+  RawSkillRecord,
+  SkillRecord,
+  SourceConfig,
+} from './types'
 
-interface SyncResult {
-  finalSkillDir: string
-  finalRelativePath: string
-  skipped: boolean
+interface SkillCopyContext {
+  request: CopySkillRequest
+  skillId: string
+  skillName: string
+  targetLabel: string
+}
+
+interface SourceCopyContext {
+  request: CopySourceRequest
+  sourceLabel: string
+  targetLabel: string
+}
+
+type CopyConflictState =
+  | {
+      kind: 'skill'
+      context: SkillCopyContext
+      description: string
+      targetPath: string
+    }
+  | {
+      kind: 'source'
+      context: SourceCopyContext
+      conflictCount: number
+      conflictPaths: string[]
+    }
+
+function formatTargetPath(rootPath: string, relativePath: string) {
+  const normalizedRoot = rootPath.replace(/[\\/]+$/, '').replace(/\\/g, '/')
+  const normalizedRelative = relativePath.replace(/^[/\\]+/, '').replace(/\\/g, '/')
+  return normalizedRelative ? `${normalizedRoot}/${normalizedRelative}` : normalizedRoot
 }
 
 type EditorState =
@@ -39,11 +78,22 @@ function App() {
   const [searchValue, setSearchValue] = useState('')
   const [selectedSkillId, setSelectedSkillId] = useState<string>()
   const [editorState, setEditorState] = useState<EditorState>(null)
-  const [syncingSkill, setSyncingSkill] = useState<SkillRecord | null>(null)
+  const [copyingSkill, setCopyingSkill] = useState<SkillRecord | null>(null)
+  const [copyingSource, setCopyingSource] = useState<SourceConfig | null>(null)
+  const [copyConflict, setCopyConflict] = useState<CopyConflictState | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [bootstrapped, setBootstrapped] = useState(false)
   const [statusLine, setStatusLine] = useState('准备来源...')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [toasts, setToasts] = useState<ToastMessage[]>([])
+
+  const pushToast = useCallback((title: string, detail?: string) => {
+    setToasts((prev) => [...prev, { id: Date.now(), title, detail }])
+  }, [])
+
+  const dismissToast = useCallback((id: number) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }, [])
 
   const refreshSkills = useCallback(async (currentSources: SourceConfig[], nextSelectedId?: string) => {
     setIsLoading(true)
@@ -142,16 +192,22 @@ function App() {
     })
   }, [activeSourceId, deferredSearchValue, showWritableOnly, skills])
 
-  useEffect(() => {
-    if (visibleSkills.length === 0) {
-      setSelectedSkillId(undefined)
-      return
-    }
-
-    if (!selectedSkillId || !visibleSkills.some((skill) => skill.id === selectedSkillId)) {
-      setSelectedSkillId(visibleSkills[0]?.id)
-    }
+  // Derive the effective selection synchronously during render to avoid a
+  // one-frame gap where selectedSkillId still points to a skill from the
+  // previous source (which would cause SkillPreview to flash/unmount).
+  const effectiveSelectedSkillId = useMemo(() => {
+    if (visibleSkills.length === 0) return undefined
+    if (selectedSkillId && visibleSkills.some((s) => s.id === selectedSkillId)) return selectedSkillId
+    return visibleSkills[0]?.id
   }, [selectedSkillId, visibleSkills])
+
+  // Keep selectedSkillId state in sync after source/filter changes so that
+  // user-initiated selections (clicks, keyboard) continue to work correctly.
+  useEffect(() => {
+    if (effectiveSelectedSkillId !== selectedSkillId) {
+      setSelectedSkillId(effectiveSelectedSkillId)
+    }
+  }, [effectiveSelectedSkillId, selectedSkillId])
 
   useEffect(() => {
     const handleKeydown = (event: KeyboardEvent) => {
@@ -160,15 +216,15 @@ function App() {
       if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') return
       if (visibleSkills.length === 0) return
 
-      const index = visibleSkills.findIndex((skill) => skill.id === selectedSkillId)
+      const index = visibleSkills.findIndex((skill) => skill.id === effectiveSelectedSkillId)
 
-      if (event.key === 'ArrowDown' || event.key.toLowerCase() === 'j') {
+      if (event.key === 'ArrowDown') {
         event.preventDefault()
         const nextIndex = index >= 0 ? Math.min(index + 1, visibleSkills.length - 1) : 0
         setSelectedSkillId(visibleSkills[nextIndex]?.id)
       }
 
-      if (event.key === 'ArrowUp' || event.key.toLowerCase() === 'k') {
+      if (event.key === 'ArrowUp') {
         event.preventDefault()
         const nextIndex = index >= 0 ? Math.max(index - 1, 0) : 0
         setSelectedSkillId(visibleSkills[nextIndex]?.id)
@@ -177,9 +233,9 @@ function App() {
 
     window.addEventListener('keydown', handleKeydown)
     return () => window.removeEventListener('keydown', handleKeydown)
-  }, [selectedSkillId, visibleSkills])
+  }, [effectiveSelectedSkillId, visibleSkills])
 
-  const selectedSkill = visibleSkills.find((skill) => skill.id === selectedSkillId)
+  const selectedSkill = visibleSkills.find((skill) => skill.id === effectiveSelectedSkillId)
   const writableSources = sources.filter((source) => source.writable)
 
   const handleOpenPath = async (path: string) => {
@@ -194,11 +250,19 @@ function App() {
 
   const handleAddCustomSource = (label: string, path: string, writable: boolean) => {
     const normalizedPath = normalizePathInput(path)
-    if (!normalizedPath) return
+    if (!normalizedPath) return false
+
+    const existingSource = sources.find((source) => isSameSourcePath(source.rootPath, normalizedPath))
+    if (existingSource) {
+      setErrorMessage(`来源路径已存在：${existingSource.label}`)
+      setStatusLine('未添加重复来源。')
+      return false
+    }
 
     const nextSources = [...sources, createCustomSource(label, normalizedPath, writable)]
     setSources(nextSources)
     setStatusLine(`已添加来源 ${label.trim()}。`)
+    return true
   }
 
   const handleToggleSource = (sourceId: string) => {
@@ -233,30 +297,132 @@ function App() {
     }
   }
 
-  const handleSyncSkill = async (targetSource: SourceConfig, conflictStrategy: SyncConflictStrategy) => {
-    if (!syncingSkill || !isTauriRuntime()) return
+  const executeSkillCopy = async (context: SkillCopyContext, conflictStrategy?: CopyConflictStrategy) => {
+    if (!isTauriRuntime()) return
 
     try {
-      const result = await invoke<SyncResult>('sync_skill', {
-        request: {
-          sourceSkillDir: syncingSkill.skillDir,
-          relativePath: syncingSkill.relativePath,
-          targetSource,
-          conflictStrategy,
-        },
+      const requestPayload = conflictStrategy
+        ? { ...context.request, conflictStrategy }
+        : context.request
+      const result = await invoke<CopySkillResult>('copy_skill', {
+        request: requestPayload,
       })
 
-      setSyncingSkill(null)
-      const nextSelectedId = `${targetSource.id}:${result.finalRelativePath}`
-      await refreshSkills(sources, result.skipped ? syncingSkill.id : nextSelectedId)
-      setStatusLine(
-        result.skipped
-          ? `已跳过 ${syncingSkill.name} 的同步（目标已存在）。`
-          : `已将 ${syncingSkill.name} 同步到 ${targetSource.label}。`,
-      )
+      if (result.status === 'conflict') {
+        setCopyingSkill(null)
+        setCopyConflict({
+          kind: 'skill',
+          context,
+          description: result.conflictMessage ?? '目标路径中已存在同名 skill，请选择如何处理。',
+          targetPath: formatTargetPath(context.request.targetSource.rootPath, result.finalRelativePath),
+        })
+        return
+      }
+
+      setCopyConflict(null)
+      setCopyingSkill(null)
+      const nextSelectedId = `${context.request.targetSource.id}:${result.finalRelativePath}`
+      await refreshSkills(sources, result.skipped ? context.skillId : nextSelectedId)
+      if (result.skipped) {
+        setStatusLine(`已跳过 ${context.skillName} 的复制（目标已存在）。`)
+      } else {
+        setStatusLine(`已将 ${context.skillName} 复制到 ${context.targetLabel}。`)
+        pushToast('复制成功', `${context.skillName} → ${context.targetLabel}`)
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : String(error))
     }
+  }
+
+  const executeSourceCopy = async (context: SourceCopyContext, conflictStrategy?: CopyConflictStrategy) => {
+    if (!isTauriRuntime()) return
+
+    try {
+      const requestPayload = conflictStrategy
+        ? { ...context.request, conflictStrategy }
+        : context.request
+      const result = await invoke<CopySourceResult>('copy_source', {
+        request: requestPayload,
+      })
+
+      if (result.status === 'conflict') {
+        setCopyingSource(null)
+        setCopyConflict({
+          kind: 'source',
+          context,
+          conflictCount: result.conflictCount,
+          conflictPaths: result.conflictRelativePaths,
+        })
+        return
+      }
+
+      setCopyConflict(null)
+      setCopyingSource(null)
+      await refreshSkills(sources)
+
+      const summaryParts = [`已复制 ${result.copiedCount} 个`]
+      if (result.renamedCount > 0) summaryParts.push(`重命名 ${result.renamedCount} 个`)
+      if (result.overwrittenCount > 0) summaryParts.push(`覆盖 ${result.overwrittenCount} 个`)
+      if (result.skippedCount > 0) summaryParts.push(`跳过 ${result.skippedCount} 个`)
+
+      const summaryStr = summaryParts.join('，')
+      setStatusLine(`${context.sourceLabel} -> ${context.targetLabel}：${summaryStr}。`)
+      pushToast('复制成功', `${context.sourceLabel} → ${context.targetLabel}：${summaryStr}`)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  const handleCopySkill = async (targetSource: SourceConfig, targetRelativePath: string) => {
+    if (!copyingSkill) return
+
+    await executeSkillCopy({
+      request: {
+        sourceSkillDir: copyingSkill.skillDir,
+        relativePath: copyingSkill.relativePath,
+        targetSource,
+        targetRelativePath,
+      },
+      skillId: copyingSkill.id,
+      skillName: copyingSkill.name,
+      targetLabel: targetSource.label,
+    })
+  }
+
+  const handleCopySkillCustom = async (customRootPath: string, targetRelativePath: string) => {
+    if (!copyingSkill) return
+
+    const targetSource: SourceConfig = {
+      id: `custom:${customRootPath}`,
+      label: customRootPath,
+      rootPath: customRootPath,
+      writable: true,
+      kind: 'custom',
+      enabled: true,
+    }
+
+    await executeSkillCopy({
+      request: {
+        sourceSkillDir: copyingSkill.skillDir,
+        relativePath: copyingSkill.relativePath,
+        targetSource,
+        targetRelativePath,
+      },
+      skillId: copyingSkill.id,
+      skillName: copyingSkill.name,
+      targetLabel: customRootPath,
+    })
+  }
+
+  const handleCopySource = async (source: SourceConfig, targetSource: SourceConfig) => {
+    await executeSourceCopy({
+      request: {
+        source,
+        targetSource,
+      },
+      sourceLabel: source.label,
+      targetLabel: targetSource.label,
+    })
   }
 
   return (
@@ -299,6 +465,7 @@ function App() {
           onSelectSource={setActiveSourceId}
           onToggleSource={handleToggleSource}
           onAddCustomSource={handleAddCustomSource}
+          onCopySource={setCopyingSource}
           onRemoveSource={handleRemoveSource}
         />
 
@@ -309,8 +476,7 @@ function App() {
             onOpenFolder={(path) => void handleOpenPath(path)}
             onOpenSkill={(path) => void handleOpenPath(path)}
             onEdit={(skill) => setEditorState({ mode: 'edit', skill })}
-            onSync={setSyncingSkill}
-            onCreate={() => setEditorState({ mode: 'create' })}
+            onCopy={setCopyingSkill}
           />
         ) : null}
 
@@ -318,7 +484,7 @@ function App() {
         {visibleSkills.length > 0 ? (
           <SkillList
             skills={visibleSkills}
-            selectedSkillId={selectedSkillId}
+            selectedSkillId={effectiveSelectedSkillId}
             onSelectSkill={setSelectedSkillId}
           />
         ) : (
@@ -336,15 +502,13 @@ function App() {
       {/* Bottom status strip */}
       <footer className="status-strip">
         <span aria-live="polite" aria-atomic="true">{statusLine}</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className="status-strip__kbd">J/K 浏览</span>
-          {isLoading ? <LoaderCircle className="spin" size={12} /> : null}
-        </div>
+        {isLoading ? <LoaderCircle className="spin" size={12} /> : null}
       </footer>
 
       {/* Modals */}
       {editorState ? (
         <SkillEditor
+          key={editorState.mode === 'edit' ? editorState.skill.id : 'create'}
           mode={editorState.mode}
           skill={editorState.mode === 'edit' ? editorState.skill : undefined}
           writableSources={writableSources}
@@ -353,16 +517,56 @@ function App() {
         />
       ) : null}
 
-      {syncingSkill ? (
-        <SyncDialog
-          skill={syncingSkill}
+      {copyingSkill ? (
+        <CopyDialog
+          key={copyingSkill.id}
+          skill={copyingSkill}
           sources={sources}
-          onCancel={() => setSyncingSkill(null)}
-          onConfirm={(targetSource, conflictStrategy) =>
-            void handleSyncSkill(targetSource, conflictStrategy)
+          onCancel={() => setCopyingSkill(null)}
+          onConfirm={(targetSource, targetRelativePath) =>
+            void handleCopySkill(targetSource, targetRelativePath)
+          }
+          onConfirmCustom={(customRootPath, targetRelativePath) =>
+            void handleCopySkillCustom(customRootPath, targetRelativePath)
           }
         />
       ) : null}
+
+      {copyingSource ? (
+        <CopySourceDialog
+          key={copyingSource.id}
+          source={copyingSource}
+          sources={sources}
+          skillCount={skills.filter((skill) => skill.sourceId === copyingSource.id).length}
+          onCancel={() => setCopyingSource(null)}
+          onConfirm={(targetSource) =>
+            void handleCopySource(copyingSource, targetSource)
+          }
+        />
+      ) : null}
+
+      {copyConflict?.kind === 'skill' ? (
+        <CopyConflictDialog
+          title={copyConflict.context.skillName}
+          description={copyConflict.description}
+          targetPath={copyConflict.targetPath}
+          onCancel={() => setCopyConflict(null)}
+          onConfirm={(strategy) => void executeSkillCopy(copyConflict.context, strategy)}
+        />
+      ) : null}
+
+      {copyConflict?.kind === 'source' ? (
+        <CopyConflictDialog
+          title={`${copyConflict.context.sourceLabel} -> ${copyConflict.context.targetLabel}`}
+          description="目标来源里已经存在部分同路径 skills，请选择本次批量复制的处理方式。"
+          conflictCount={copyConflict.conflictCount}
+          conflictPaths={copyConflict.conflictPaths}
+          onCancel={() => setCopyConflict(null)}
+          onConfirm={(strategy) => void executeSourceCopy(copyConflict.context, strategy)}
+        />
+      ) : null}
+
+      <ToastContainer messages={toasts} onDismiss={dismissToast} />
     </main>
   )
 }

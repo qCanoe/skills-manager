@@ -1,14 +1,17 @@
-import { CopyPlus, FilePenLine, FilePlus, FolderOpen, SquareArrowOutUpRight } from 'lucide-react'
+import { useMemo, useRef, useState, useCallback } from 'react'
+import { marked } from 'marked'
+import { CopyPlus, FilePenLine, FolderOpen, SquareArrowOutUpRight } from 'lucide-react'
 
 import type { SkillRecord } from '../types'
+
+marked.setOptions({ breaks: true })
 
 interface SkillPreviewProps {
   skill?: SkillRecord
   onOpenSkill: (path: string) => void
   onOpenFolder: (path: string) => void
   onEdit: (skill: SkillRecord) => void
-  onSync: (skill: SkillRecord) => void
-  onCreate: () => void
+  onCopy: (skill: SkillRecord) => void
 }
 
 export function SkillPreview({
@@ -16,9 +19,23 @@ export function SkillPreview({
   onOpenSkill,
   onOpenFolder,
   onEdit,
-  onSync,
-  onCreate,
+  onCopy,
 }: SkillPreviewProps) {
+  const rawContent = skill?.rawContent ?? ''
+  const renderedHtml = useMemo(() => {
+    if (!rawContent) return ''
+    return marked.parse(rawContent) as string
+  }, [rawContent])
+
+  const [isScrolling, setIsScrolling] = useState(false)
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleScroll = useCallback(() => {
+    setIsScrolling(true)
+    if (hideTimer.current) clearTimeout(hideTimer.current)
+    hideTimer.current = setTimeout(() => setIsScrolling(false), 800)
+  }, [])
+
   if (!skill) return null
 
   return (
@@ -57,14 +74,9 @@ export function SkillPreview({
             </button>
           ) : null}
 
-          <button className="ghost-button" onClick={onCreate} type="button">
-            <FilePlus size={12} />
-            基于此新建
-          </button>
-
-          <button className="accent-button" onClick={() => onSync(skill)} type="button">
+          <button className="accent-button" onClick={() => onCopy(skill)} type="button">
             <CopyPlus size={12} />
-            同步
+            复制
           </button>
         </div>
 
@@ -89,8 +101,11 @@ export function SkillPreview({
           </div>
         </div>
 
-        <div className="skill-drawer__preview">
-          <pre>{skill.rawContent}</pre>
+        <div
+          className={`skill-drawer__preview ${isScrolling ? 'is-scrolling' : ''}`}
+          onScroll={handleScroll}
+        >
+          <div className="md-body" dangerouslySetInnerHTML={{ __html: renderedHtml }} />
         </div>
       </div>
     </div>

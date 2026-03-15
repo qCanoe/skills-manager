@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 
 import { buildRelativeSkillPath, buildSkillTemplate } from '../lib/skills'
+import { Select } from './Select'
 import type { SkillRecord, SourceConfig } from '../types'
 
 interface SkillEditorProps {
@@ -23,20 +24,10 @@ export function SkillEditor({
   const [description, setDescription] = useState(skill?.description ?? '')
   const [namespace, setNamespace] = useState(skill?.namespace ?? '')
   const [body, setBody] = useState('')
-  const [rawContent, setRawContent] = useState(skill?.rawContent ?? '')
+  const [rawContent, setRawContent] = useState(
+    skill?.rawContent ?? buildSkillTemplate('new-skill', 'Describe this skill.', ''),
+  )
   const [isManuallyEdited, setIsManuallyEdited] = useState(false)
-
-  useEffect(() => {
-    if (mode === 'create' && !isManuallyEdited) {
-      setRawContent(buildSkillTemplate(name || 'new-skill', description || 'Describe this skill.', body))
-    }
-  }, [body, description, isManuallyEdited, mode, name])
-
-  useEffect(() => {
-    if (mode === 'edit' && skill) {
-      setRawContent(skill.rawContent)
-    }
-  }, [mode, skill])
 
   const selectedSource = useMemo(
     () => writableSources.find((source) => source.id === selectedSourceId) ?? writableSources[0],
@@ -58,6 +49,12 @@ export function SkillEditor({
     })
   }
 
+  const updateDraftContent = (nextName: string, nextDescription: string, nextBody: string) => {
+    if (mode !== 'create' || isManuallyEdited) return
+
+    setRawContent(buildSkillTemplate(nextName || 'new-skill', nextDescription || 'Describe this skill.', nextBody))
+  }
+
   return (
     <div className="modal-backdrop">
       <section className="modal-panel">
@@ -69,19 +66,13 @@ export function SkillEditor({
         <form className="editor-form" onSubmit={handleSubmit}>
           <div className="field-group">
             <label className="field-label" htmlFor="editor-source">目标来源</label>
-            <select
+            <Select
               id="editor-source"
-              className="field-select"
-              disabled={mode === 'edit'}
               value={selectedSourceId}
-              onChange={(event) => setSelectedSourceId(event.target.value)}
-            >
-              {writableSources.map((source) => (
-                <option key={source.id} value={source.id}>
-                  {source.label}
-                </option>
-              ))}
-            </select>
+              disabled={mode === 'edit'}
+              options={writableSources.map((source) => ({ value: source.id, label: source.label }))}
+              onChange={setSelectedSourceId}
+            />
           </div>
 
           {mode === 'create' ? (
@@ -92,7 +83,11 @@ export function SkillEditor({
                   id="editor-name"
                   className="field-input"
                   value={name}
-                  onChange={(event) => setName(event.target.value)}
+                  onChange={(event) => {
+                    const nextName = event.target.value
+                    setName(nextName)
+                    updateDraftContent(nextName, description, body)
+                  }}
                   placeholder="my-skill"
                 />
               </div>
@@ -104,7 +99,11 @@ export function SkillEditor({
                   className="field-textarea"
                   rows={2}
                   value={description}
-                  onChange={(event) => setDescription(event.target.value)}
+                  onChange={(event) => {
+                    const nextDescription = event.target.value
+                    setDescription(nextDescription)
+                    updateDraftContent(name, nextDescription, body)
+                  }}
                   placeholder="这个 skill 的用途和使用时机"
                 />
               </div>
@@ -127,7 +126,11 @@ export function SkillEditor({
                   className="field-textarea"
                   rows={6}
                   value={body}
-                  onChange={(event) => setBody(event.target.value)}
+                  onChange={(event) => {
+                    const nextBody = event.target.value
+                    setBody(nextBody)
+                    updateDraftContent(name, description, nextBody)
+                  }}
                   placeholder="## 指南&#10;说明 agent 应如何使用此 skill。"
                 />
               </div>

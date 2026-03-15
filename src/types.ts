@@ -1,4 +1,4 @@
-export type SourceKind = 'cursor' | 'codex' | 'builtin' | 'custom'
+export type SourceKind = 'cursor' | 'codex' | 'custom'
 
 export interface SourceConfig {
   id: string
@@ -39,11 +39,36 @@ export interface SaveSkillRequest {
   overwrite: boolean
 }
 
-export type SyncConflictStrategy = 'skip' | 'overwrite' | 'rename'
+export type CopyConflictStrategy = 'skip' | 'overwrite' | 'rename'
 
-export interface SyncSkillRequest {
+export interface CopySkillRequest {
   sourceSkillDir: string
   relativePath: string
   targetSource: SourceConfig
-  conflictStrategy: SyncConflictStrategy
+  targetRelativePath: string
+  conflictStrategy?: CopyConflictStrategy
+}
+
+export interface CopySourceRequest {
+  source: SourceConfig
+  targetSource: SourceConfig
+  conflictStrategy?: CopyConflictStrategy
+}
+
+export interface CopySourceResult {
+  status: 'copied' | 'conflict'
+  copiedCount: number
+  skippedCount: number
+  overwrittenCount: number
+  renamedCount: number
+  conflictCount: number
+  conflictRelativePaths: string[]
+}
+
+export interface CopySkillResult {
+  status: 'copied' | 'conflict'
+  finalSkillDir?: string
+  finalRelativePath: string
+  skipped: boolean
+  conflictMessage?: string
 }

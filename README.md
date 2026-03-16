@@ -69,14 +69,32 @@ npm run tauri dev
 
 应用启动后会以托盘面板形式运行。点击托盘图标可显示或隐藏窗口。
 
+### 构建、产物与直接运行
+
+如果你只是想正常使用这个应用，而不是继续开发它，需要区分下面三种场景：
+
+- `npm run tauri dev`：开发模式。适合一边改代码一边调试，通常会配合编辑器和终端使用。
+- `npm run tauri build`：发布模式。用于生成最终成品，只需要在准备发布新版本时执行一次。
+- 直接运行 `exe` 或安装包：最终使用方式。构建完成后不再依赖 `npm`、源码目录或编辑器。
+
+也就是说，`npm run tauri build` 不是每次打开应用都要执行的命令。它更像“出厂打包”，执行完成后就可以直接运行生成的程序。
+
+在 Windows 上，构建完成后常见产物路径如下：
+
+- 便携版可执行文件：`src-tauri/target/release/skills-manager.exe`
+- NSIS 安装包：`src-tauri/target/release/bundle/nsis/Skills Manager_0.1.0_x64-setup.exe`
+- MSI 安装包：`src-tauri/target/release/bundle/msi/Skills Manager_0.1.0_x64_en-US.msi`
+
+如果你想获得类似“下载后双击即可打开”的体验，可以优先使用 `skills-manager.exe`；如果你想把应用正式分发给其他人安装，建议使用安装包。
+
 ### 常用命令
 
 | 命令 | 说明 |
 | --- | --- |
-| `npm run tauri dev` | 启动 Tauri 桌面开发环境 |
+| `npm run tauri dev` | 启动 Tauri 桌面开发环境，适合本地调试 |
 | `npm run dev` | 仅启动 Vite 浏览器预览 |
 | `npm run build` | 构建前端资源 |
-| `npm run tauri build` | 打包桌面应用 |
+| `npm run tauri build` | 构建并打包桌面应用，生成最终可分发产物 |
 | `npm run lint` | 运行 ESLint |
 
 ## 使用方式

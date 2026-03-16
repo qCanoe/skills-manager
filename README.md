@@ -21,17 +21,17 @@
 
 `Skills Manager` 面向以目录形式组织的 agent skills。
 
-在这个项目里，一个 skill 不是单独的一段文本，而是一个目录。目录中必须包含一个名为 `SKILL.md` 的核心文件，还可以附带示例、素材、说明文档或其他补充文件。应用会扫描多个来源目录，把这些 skill 聚合到一个桌面面板中进行浏览、搜索、预览、编辑和同步。
+在这个项目里，一个 skill 不是单独的一段文本，而是一个目录。目录中必须包含一个名为 `SKILL.md` 的核心文件，还可以附带示例、素材、说明文档或其他补充文件。应用会扫描多个来源目录，把这些 skill 聚合到一个桌面面板中进行浏览、搜索、预览、编辑和复制。
 
 它特别适合下面这些场景：
 
 - 同时维护 `~/.cursor/skills`、`~/.codex/skills` 和团队自定义技能目录
 - 快速查看某个 skill 的原始内容、路径、命名空间和附件
-- 把个人 skill 从一个来源复制到另一个来源，并处理命名冲突
+- 把个人 skill 或整个来源复制到另一个来源或自定义路径，并处理命名冲突
 - 用一个轻量桌面面板代替在文件系统里来回翻目录
 
 > [!IMPORTANT]
-> `npm run dev` 只会启动浏览器预览，用于查看前端界面。真正的扫描、保存、同步、打开路径和托盘功能依赖 Tauri 运行时，请使用 `npm run tauri dev`。
+> `npm run dev` 只会启动浏览器预览，用于查看前端界面。真正的扫描、保存、复制、打开路径和托盘功能依赖 Tauri 运行时，请使用 `npm run tauri dev`。
 
 ## 功能特性
 
@@ -42,7 +42,7 @@
 - 只看可编辑内容：一键过滤只读来源，聚焦可修改的 skill
 - 原始内容预览：查看完整 `SKILL.md`、路径、命名空间和目录附件
 - 新建与编辑：自动生成标准模板，并按 `[namespace/]<slug>/SKILL.md` 组织路径
-- 跨来源同步：把整个 skill 目录复制到目标来源，支持 `rename`、`overwrite`、`skip`
+- 跨来源复制：支持复制单个 skill 或整个来源到目标，可复制到内置来源或自定义路径，冲突时支持 `rename`、`overwrite`、`skip`
 - 桌面托盘交互：支持显示/隐藏窗口、重新扫描和退出应用
 - 快捷浏览：支持方向键在 skill 列表间移动
 
@@ -140,9 +140,16 @@ npm run tauri dev
 .system/tools/my-skill/SKILL.md
 ```
 
-### 5. 同步 skill
+### 5. 复制 skill 或来源
 
-同步不是只复制 `SKILL.md`，而是复制整个 skill 目录。
+复制会复制整个 skill 目录（或整个来源下的所有 skills），不是只复制 `SKILL.md`。
+
+支持两种复制方式：
+
+- **复制单个 skill**：在 skill 详情区点击复制，选择目标来源或输入自定义路径
+- **复制整个来源**：在来源管理区点击复制，将该来源下所有 skills 批量复制到目标来源
+
+根目录下的 skill（无子目录）无法直接复制，需先移到单独文件夹中。
 
 支持三种冲突策略：
 
@@ -161,7 +168,7 @@ npm run tauri dev
 
 ## Skill 目录结构
 
-应用以目录为单位识别和同步 skill。最小可用结构如下：
+应用以目录为单位识别和复制 skill。最小可用结构如下：
 
 ```text
 my-skill/
@@ -203,13 +210,13 @@ Describe how the agent should use this skill.
 - 前端：`React 19`、`TypeScript 5.9`、`Vite 8`
 - 桌面层：`Tauri 2`
 - 后端：`Rust 2021`
-- 主要依赖：`@tauri-apps/api`、`lucide-react`、`clsx`、`walkdir`、`serde`
+- 主要依赖：`@tauri-apps/api`、`lucide-react`、`clsx`、`marked`、`walkdir`、`serde`
 
 ### 代码职责
 
-- `src/`：前端界面、来源管理、搜索筛选、预览、编辑和同步弹窗
+- `src/`：前端界面、来源管理、搜索筛选、预览、编辑和复制弹窗
 - `src/lib/`：skill 元数据解析、来源持久化、UI 状态持久化
-- `src-tauri/src/lib.rs`：本地文件扫描、写入、目录同步、打开路径、托盘与窗口行为
+- `src-tauri/src/lib.rs`：本地文件扫描、写入、目录复制、打开路径、托盘与窗口行为
 
 ### 当前实现注意点
 

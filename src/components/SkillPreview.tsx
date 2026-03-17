@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { CopyPlus, FilePenLine, FolderOpen, SquareArrowOutUpRight } from 'lucide-react'
+import { ChevronDown, CopyPlus, FilePenLine, FolderOpen, SquareArrowOutUpRight } from 'lucide-react'
 
 import type { SkillRecord } from '../types'
 
@@ -21,18 +21,24 @@ export function SkillPreview({
   onCopy,
 }: SkillPreviewProps) {
   const [renderedHtml, setRenderedHtml] = useState('')
+  const [htmlReady, setHtmlReady] = useState(false)
 
   useEffect(() => {
+    setHtmlReady(false)
     if (!rawContent) { setRenderedHtml(''); return }
     let cancelled = false
     void import('marked').then(({ marked }) => {
       marked.setOptions({ breaks: true })
-      if (!cancelled) setRenderedHtml(marked.parse(rawContent) as string)
+      if (!cancelled) {
+        setRenderedHtml(marked.parse(rawContent) as string)
+        setHtmlReady(true)
+      }
     })
     return () => { cancelled = true }
   }, [rawContent])
 
   const [isScrolling, setIsScrolling] = useState(false)
+  const [expanded, setExpanded] = useState(true)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleScroll = useCallback(() => {
@@ -45,12 +51,27 @@ export function SkillPreview({
 
   return (
     <div className="tray-section">
-      <div className="skill-drawer">
+      <div key={skill.id} className="skill-drawer skill-drawer--enter">
         <div className="skill-drawer__header">
-          <h3 className="skill-drawer__name">{skill.name}</h3>
-          {skill.description ? (
-            <p className="skill-drawer__desc">{skill.description}</p>
-          ) : null}
+          <div className="skill-drawer__header-main">
+            <div className="skill-drawer__header-text">
+              <h3 className="skill-drawer__name">{skill.name}</h3>
+              {skill.description ? (
+                <p className="skill-drawer__desc">{skill.description}</p>
+              ) : null}
+            </div>
+            <button
+              className="skill-drawer__collapse-btn"
+              type="button"
+              onClick={() => setExpanded(o => !o)}
+              aria-label={expanded ? '折叠' : '展开'}
+            >
+              <ChevronDown
+                size={14}
+                className={`skill-drawer__collapse-chevron ${expanded ? '' : 'is-collapsed'}`}
+              />
+            </button>
+          </div>
         </div>
 
         <div className="skill-drawer__actions">
@@ -85,33 +106,40 @@ export function SkillPreview({
           </button>
         </div>
 
-        <div className="skill-drawer__meta">
-          <div className="skill-drawer__meta-item">
-            <span className="skill-drawer__meta-label">路径</span>
-            <span className="skill-drawer__meta-value">{skill.relativePath}</span>
-          </div>
-          <div className="skill-drawer__meta-item">
-            <span className="skill-drawer__meta-label">命名空间</span>
-            <span className="skill-drawer__meta-value">{skill.namespace ?? '顶层'}</span>
-          </div>
-          <div className="skill-drawer__meta-item">
-            <span className="skill-drawer__meta-label">权限</span>
-            <span className="skill-drawer__meta-value">{skill.writable ? '可编辑' : '只读'}</span>
-          </div>
-          <div className="skill-drawer__meta-item">
-            <span className="skill-drawer__meta-label">附件</span>
-            <span className="skill-drawer__meta-value">
-              {skill.extras.length > 0 ? skill.extras.join(', ') : '无'}
-            </span>
-          </div>
-        </div>
+        {expanded && (
+          <>
+            <div className="skill-drawer__meta">
+              <div className="skill-drawer__meta-item">
+                <span className="skill-drawer__meta-label">路径</span>
+                <span className="skill-drawer__meta-value">{skill.relativePath}</span>
+              </div>
+              <div className="skill-drawer__meta-item">
+                <span className="skill-drawer__meta-label">命名空间</span>
+                <span className="skill-drawer__meta-value">{skill.namespace ?? '顶层'}</span>
+              </div>
+              <div className="skill-drawer__meta-item">
+                <span className="skill-drawer__meta-label">权限</span>
+                <span className="skill-drawer__meta-value">{skill.writable ? '可编辑' : '只读'}</span>
+              </div>
+              <div className="skill-drawer__meta-item">
+                <span className="skill-drawer__meta-label">附件</span>
+                <span className="skill-drawer__meta-value">
+                  {skill.extras.length > 0 ? skill.extras.join(', ') : '无'}
+                </span>
+              </div>
+            </div>
 
-        <div
-          className={`skill-drawer__preview ${isScrolling ? 'is-scrolling' : ''}`}
-          onScroll={handleScroll}
-        >
-          <div className="md-body" dangerouslySetInnerHTML={{ __html: renderedHtml }} />
-        </div>
+            <div
+              className={`skill-drawer__preview ${isScrolling ? 'is-scrolling' : ''}`}
+              onScroll={handleScroll}
+            >
+              <div
+                className={`md-body ${htmlReady ? 'md-body--ready' : ''}`}
+                dangerouslySetInnerHTML={{ __html: renderedHtml }}
+              />
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

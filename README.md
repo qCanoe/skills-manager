@@ -2,7 +2,7 @@
 
 # Skills Manager
 
-一个基于 `Tauri` + `React` 构建的桌面技能包管理器，用来集中管理 `Cursor`、`Codex` 和自定义目录中的 `SKILL.md`。
+一个基于 `Tauri` + `React` 构建的超轻量indows托盘插件，用来集中管理 `Cursor`、`Codex` 和自定义目录中的 `SKILL.md`。
 
 [概览](#概览) • [功能特性](#功能特性) • [快速开始](#快速开始) • [使用方式](#使用方式) • [Skill 目录结构](#skill-目录结构) • [开发说明](#开发说明)
 
@@ -19,12 +19,8 @@
 - 直接新建、编辑、复制单个 skill，或批量复制整个来源并处理冲突
 - 通过来源开关、可写筛选和托盘入口，把日常 skill 维护流程收拢成一个统一入口
 
-<p align="center">
-  <img src="image/readme/main-view.png" alt="主界面" width="24%" />
-  <img src="image/readme/skill-list.png" alt="技能列表" width="24%" />
-  <img src="image/readme/skill-detail.png" alt="技能详情" width="24%" />
-  <img src="image/readme/cursor-sources-paths.png" alt="Cursor 技能路径" width="24%" />
-</p>
+<img src="image\readme\image.png" alt="image-20260317192831519" style="zoom:50%;" />
+
 
 ## 功能特性
 

@@ -1,37 +1,30 @@
-<p align="center">
-  <img src="./src-tauri/icons/skills_icon_terminal.svg" alt="Skills Manager logo" width="88" />
-</p>
 
-<h1 align="center">Skills Manager</h1>
 
-<p align="center">
-  一个基于 <code>Tauri</code> + <code>React</code> 构建的桌面技能包管理器，用来集中管理 <code>Cursor</code>、<code>Codex</code> 和自定义目录中的 <code>SKILL.md</code>。
-</p>
+# Skills Manager
 
-<p align="center">
-  <a href="#概览">概览</a> •
-  <a href="#功能特性">功能特性</a> •
-  <a href="#快速开始">快速开始</a> •
-  <a href="#使用方式">使用方式</a> •
-  <a href="#skill-目录结构">Skill 目录结构</a> •
-  <a href="#开发说明">开发说明</a>
-</p>
+一个基于 `Tauri` + `React` 构建的桌面技能包管理器，用来集中管理 `Cursor`、`Codex` 和自定义目录中的 `SKILL.md`。
+
+[概览](#概览) • [功能特性](#功能特性) • [快速开始](#快速开始) • [使用方式](#使用方式) • [Skill 目录结构](#skill-目录结构) • [开发说明](#开发说明)
 
 ## 概览
 
-`Skills Manager` 面向以目录形式组织的 agent skills。
+`Skills Manager` 是一个面向 `SKILL.md` 工作流的桌面管理工具，用来把分散在不同目录里的 agent skills 收拢到同一个界面中统一维护。
 
-在这个项目里，一个 skill 不是单独的一段文本，而是一个目录。目录中必须包含一个名为 `SKILL.md` 的核心文件，还可以附带示例、素材、说明文档或其他补充文件。应用会扫描多个来源目录，把这些 skill 聚合到一个桌面面板中进行浏览、搜索、预览、编辑和复制。
+基于 `Tauri` + `React` 构建，可以直接连接本地文件系统的桌面应用。你可以在这里完成来源扫描、搜索筛选、原文预览、技能编辑、跨来源复制和来源管理，把原本需要频繁切换文件夹与编辑器的流程集中到一个轻量工作台中。
 
-它特别适合下面这些场景：
+该项目适合以下场景：
 
 - 同时维护 `~/.cursor/skills`、`~/.codex/skills` 和团队自定义技能目录
-- 快速查看某个 skill 的原始内容、路径、命名空间和附件
-- 把个人 skill 或整个来源复制到另一个来源或自定义路径，并处理命名冲突
-- 用一个轻量桌面面板代替在文件系统里来回翻目录
+- 在一个桌面面板中快速搜索、浏览和预览 skill 内容与附加文件
+- 直接新建、编辑、复制单个 skill，或批量复制整个来源并处理冲突
+- 通过来源开关、可写筛选和托盘入口，把日常 skill 维护流程收拢成一个统一入口
 
-> [!IMPORTANT]
-> `npm run dev` 只会启动浏览器预览，用于查看前端界面。真正的扫描、保存、复制、打开路径和托盘功能依赖 Tauri 运行时，请使用 `npm run tauri dev`。
+<p align="center">
+  <img src="image/readme/main-view.png" alt="主界面" width="24%" />
+  <img src="image/readme/skill-list.png" alt="技能列表" width="24%" />
+  <img src="image/readme/skill-detail.png" alt="技能详情" width="24%" />
+  <img src="image/readme/cursor-sources-paths.png" alt="Cursor 技能路径" width="24%" />
+</p>
 
 ## 功能特性
 
@@ -79,6 +72,9 @@ npm run tauri dev
 
 也就是说，`npm run tauri build` 不是每次打开应用都要执行的命令。它更像“出厂打包”，执行完成后就可以直接运行生成的程序。
 
+> [!IMPORTANT]
+> `npm run dev` 只会启动浏览器预览，用于查看前端界面。真正的扫描、保存、复制、打开路径和托盘功能依赖 Tauri 运行时，请使用 `npm run tauri dev`。
+
 在 Windows 上，构建完成后常见产物路径如下：
 
 - 便携版可执行文件：`src-tauri/target/release/skills-manager.exe`
@@ -89,13 +85,15 @@ npm run tauri dev
 
 ### 常用命令
 
-| 命令 | 说明 |
-| --- | --- |
-| `npm run tauri dev` | 启动 Tauri 桌面开发环境，适合本地调试 |
-| `npm run dev` | 仅启动 Vite 浏览器预览 |
-| `npm run build` | 构建前端资源 |
-| `npm run tauri build` | 构建并打包桌面应用，生成最终可分发产物 |
-| `npm run lint` | 运行 ESLint |
+
+| 命令                    | 说明                     |
+| --------------------- | ---------------------- |
+| `npm run tauri dev`   | 启动 Tauri 桌面开发环境，适合本地调试 |
+| `npm run dev`         | 仅启动 Vite 浏览器预览         |
+| `npm run build`       | 构建前端资源                 |
+| `npm run tauri build` | 构建并打包桌面应用，生成最终可分发产物    |
+| `npm run lint`        | 运行 ESLint              |
+
 
 ## 使用方式
 
@@ -103,11 +101,13 @@ npm run tauri dev
 
 应用首次启动会自动加载以下来源：
 
-| 来源 | 默认路径 | 可写 | 说明 |
-| --- | --- | --- | --- |
-| `Cursor / Personal` | `~/.cursor/skills` | 是 | 个人 Cursor skills |
-| `Codex / Personal` | `~/.codex/skills` | 是 | 个人 Codex skills |
-| `Cursor / Built-in` | `~/.cursor/skills-cursor` | 否 | 内置技能，默认只读 |
+
+| 来源                  | 默认路径                      | 可写  | 说明               |
+| ------------------- | ------------------------- | --- | ---------------- |
+| `Cursor / Personal` | `~/.cursor/skills`        | 是   | 个人 Cursor skills |
+| `Codex / Personal`  | `~/.codex/skills`         | 是   | 个人 Codex skills  |
+| `Cursor / Built-in` | `~/.cursor/skills-cursor` | 否   | 内置技能，默认只读        |
+
 
 > [!NOTE]
 > `~` 表示当前用户目录。在 Windows 上通常对应 `C:\Users\<你的用户名>`。

@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { AlertTriangle, LoaderCircle, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState, useDeferredValue } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useDeferredValue } from 'react'
 
 import './styles/app.css'
 import { CopyConflictDialog } from './components/CopyConflictDialog'
@@ -72,7 +72,10 @@ function isTauriRuntime() {
 
 function App() {
   const [sources, setSources] = useState<SourceConfig[]>([])
+  const sourcesRef = useRef(sources)
   const [skills, setSkills] = useState<SkillRecord[]>([])
+  const [refreshSeq, setRefreshSeq] = useState(0)
+  const [loadedContent, setLoadedContent] = useState('')
   const [activeSourceId, setActiveSourceId] = useState(loadActiveSource())
   const [showWritableOnly, setShowWritableOnly] = useState(loadWritableOnly())
   const [searchValue, setSearchValue] = useState('')
@@ -106,6 +109,7 @@ function App() {
       })
       const normalized = normalizeSkills(rawSkills, currentSources)
       setSkills(normalized)
+      setRefreshSeq((n) => n + 1)
       setSelectedSkillId((previous) => nextSelectedId ?? previous ?? normalized[0]?.id)
       setStatusLine(`已索引 ${normalized.length} 个 skills`)
     } catch (error) {
@@ -150,6 +154,10 @@ function App() {
   }, [bootstrapped, refreshSkills, sources])
 
   useEffect(() => {
+    sourcesRef.current = sources
+  }, [sources])
+
+  useEffect(() => {
     persistActiveSource(activeSourceId)
   }, [activeSourceId])
 
@@ -162,7 +170,7 @@ function App() {
 
     const setupListener = async () => {
       const unlisten = await listen('refresh-requested', () => {
-        void refreshSkills(sources)
+        void refreshSkills(sourcesRef.current)
       })
       return unlisten
     }
@@ -173,7 +181,7 @@ function App() {
     })
 
     return () => cleanup?.()
-  }, [refreshSkills, sources])
+  }, [refreshSkills])
 
   const deferredSearchValue = useDeferredValue(searchValue)
 
@@ -185,10 +193,7 @@ function App() {
       if (activeSourceId !== 'all' && skill.sourceId !== activeSourceId) return false
       if (!term) return true
 
-      return [skill.name, skill.description, skill.sourceLabel, skill.relativePath, skill.previewBody]
-        .join(' ')
-        .toLowerCase()
-        .includes(term)
+      return skill.searchIndex.includes(term)
     })
   }, [activeSourceId, deferredSearchValue, showWritableOnly, skills])
 
@@ -236,6 +241,19 @@ function App() {
   }, [effectiveSelectedSkillId, visibleSkills])
 
   const selectedSkill = visibleSkills.find((skill) => skill.id === effectiveSelectedSkillId)
+  const selectedSkillFile = selectedSkill?.skillFile
+
+  useEffect(() => {
+    if (!selectedSkillFile || !isTauriRuntime()) { setLoadedContent(''); return }
+
+    let cancelled = false
+    setLoadedContent('')
+    void invoke<string>('get_skill_content', { skillFile: selectedSkillFile })
+      .then((content) => { if (!cancelled) setLoadedContent(content) })
+      .catch((err) => { if (!cancelled) setErrorMessage(err instanceof Error ? err.message : String(err)) })
+    return () => { cancelled = true }
+  }, [selectedSkillFile, refreshSeq])
+
   const writableSources = sources.filter((source) => source.writable)
 
   const handleOpenPath = async (path: string) => {
@@ -473,6 +491,7 @@ function App() {
         {selectedSkill ? (
           <SkillPreview
             skill={selectedSkill}
+            rawContent={loadedContent}
             onOpenFolder={(path) => void handleOpenPath(path)}
             onOpenSkill={(path) => void handleOpenPath(path)}
             onEdit={(skill) => setEditorState({ mode: 'edit', skill })}
@@ -511,6 +530,7 @@ function App() {
           key={editorState.mode === 'edit' ? editorState.skill.id : 'create'}
           mode={editorState.mode}
           skill={editorState.mode === 'edit' ? editorState.skill : undefined}
+          initialContent={editorState.mode === 'edit' ? loadedContent : undefined}
           writableSources={writableSources}
           onCancel={() => setEditorState(null)}
           onSubmit={(payload) => void handleSaveSkill(payload)}

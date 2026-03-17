@@ -410,9 +410,65 @@
   border: 1px solid var(--border-strong);
 }
 
+.skill-drawer--enter {
+  animation: skill-drawer-enter 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes skill-drawer-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .skill-drawer__header {
   padding: 16px;
   border-bottom: 1px solid var(--border);
+}
+
+.skill-drawer__header-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.skill-drawer__header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.skill-drawer__collapse-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 0;
+  margin-top: 1px;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.skill-drawer__collapse-btn:hover {
+  background: var(--bg-strong);
+  color: var(--text-muted);
+}
+
+.skill-drawer__collapse-chevron {
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.skill-drawer__collapse-chevron.is-collapsed {
+  transform: rotate(-90deg);
 }
 
 .skill-drawer__name {
@@ -510,6 +566,12 @@
   line-height: 1.7;
   color: var(--text-muted);
   word-break: break-word;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.md-body--ready {
+  opacity: 1;
 }
 
 .md-body h1,
@@ -1558,6 +1620,9 @@ button:focus-visible {
   .toast { transition: none; }
   .toast__progress-bar { animation: none; }
   .custom-select__list { animation: none; }
+  .skill-drawer--enter { animation: none; }
+  .md-body { transition: none; opacity: 1; }
+  .md-body--ready { opacity: 1; }
 }
 
 /* ── Custom Select ────────────────────────────────────────────── */

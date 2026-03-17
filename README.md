@@ -19,7 +19,7 @@
 - 直接新建、编辑、复制单个 skill，或批量复制整个来源并处理冲突
 - 通过来源开关、可写筛选和托盘入口，把日常 skill 维护流程收拢成一个统一入口
 
-<img src="image\readme\image.png" alt="image-20260317192831519" style="zoom:50%;" />
+<img src="image\readme\image.png" alt="image-20260317192831519" style="zoom:30%;" />
 
 
 ## 功能特性

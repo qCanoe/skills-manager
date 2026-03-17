@@ -7,6 +7,7 @@ import type { SkillRecord, SourceConfig } from '../types'
 interface SkillEditorProps {
   mode: 'create' | 'edit'
   skill?: SkillRecord
+  initialContent?: string
   writableSources: SourceConfig[]
   onCancel: () => void
   onSubmit: (payload: { source: SourceConfig; relativePath: string; rawContent: string; overwrite: boolean }) => void
@@ -15,6 +16,7 @@ interface SkillEditorProps {
 export function SkillEditor({
   mode,
   skill,
+  initialContent,
   writableSources,
   onCancel,
   onSubmit,
@@ -25,7 +27,7 @@ export function SkillEditor({
   const [namespace, setNamespace] = useState(skill?.namespace ?? '')
   const [body, setBody] = useState('')
   const [rawContent, setRawContent] = useState(
-    skill?.rawContent ?? buildSkillTemplate('new-skill', 'Describe this skill.', ''),
+    initialContent ?? buildSkillTemplate('new-skill', 'Describe this skill.', ''),
   )
   const [isManuallyEdited, setIsManuallyEdited] = useState(false)
 

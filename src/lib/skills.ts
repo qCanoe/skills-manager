@@ -80,7 +80,7 @@ export function normalizeSkills(
         return []
       }
 
-      const parsed = parseFrontmatter(rawSkill.rawContent)
+      const parsed = parseFrontmatter(rawSkill.rawExcerpt)
       const name = readString(parsed.data.name) || getSkillFolderName(rawSkill.relativePath)
       const description =
         readString(parsed.data.description) || buildExcerpt(parsed.content) || 'No description'
@@ -91,6 +91,11 @@ export function normalizeSkills(
         tags.push(namespace)
       }
 
+      const previewBody = buildExcerpt(parsed.content)
+      const searchIndex = [name, description, source.label, rawSkill.relativePath, previewBody]
+        .join(' ')
+        .toLowerCase()
+
       return [{
         ...rawSkill,
         id: `${rawSkill.sourceId}:${rawSkill.relativePath}`,
@@ -100,8 +105,9 @@ export function normalizeSkills(
         name,
         description,
         namespace,
-        previewBody: buildExcerpt(parsed.content),
+        previewBody,
         tags,
+        searchIndex,
       } satisfies SkillRecord]
     })
     .sort((left, right) => left.name.localeCompare(right.name))

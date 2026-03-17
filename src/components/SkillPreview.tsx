@@ -1,13 +1,11 @@
-import { useMemo, useRef, useState, useCallback } from 'react'
-import { marked } from 'marked'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { CopyPlus, FilePenLine, FolderOpen, SquareArrowOutUpRight } from 'lucide-react'
 
 import type { SkillRecord } from '../types'
 
-marked.setOptions({ breaks: true })
-
 interface SkillPreviewProps {
   skill?: SkillRecord
+  rawContent: string
   onOpenSkill: (path: string) => void
   onOpenFolder: (path: string) => void
   onEdit: (skill: SkillRecord) => void
@@ -16,15 +14,22 @@ interface SkillPreviewProps {
 
 export function SkillPreview({
   skill,
+  rawContent,
   onOpenSkill,
   onOpenFolder,
   onEdit,
   onCopy,
 }: SkillPreviewProps) {
-  const rawContent = skill?.rawContent ?? ''
-  const renderedHtml = useMemo(() => {
-    if (!rawContent) return ''
-    return marked.parse(rawContent) as string
+  const [renderedHtml, setRenderedHtml] = useState('')
+
+  useEffect(() => {
+    if (!rawContent) { setRenderedHtml(''); return }
+    let cancelled = false
+    void import('marked').then(({ marked }) => {
+      marked.setOptions({ breaks: true })
+      if (!cancelled) setRenderedHtml(marked.parse(rawContent) as string)
+    })
+    return () => { cancelled = true }
   }, [rawContent])
 
   const [isScrolling, setIsScrolling] = useState(false)

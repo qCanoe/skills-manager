@@ -40,7 +40,7 @@ struct DiscoveredSkill {
   skill_file: String,
   relative_path: String,
   extras: Vec<String>,
-  raw_content: String,
+  raw_excerpt: String,
   modified_at_epoch: Option<u64>,
 }
 
@@ -175,13 +175,49 @@ fn scan_skills(sources: Vec<SourceConfig>) -> Result<Vec<DiscoveredSkill>, Strin
         skill_file: skill_file.to_string_lossy().to_string(),
         relative_path: normalize_relative_path(relative),
         extras,
-        raw_content,
+        raw_excerpt: build_raw_excerpt(&raw_content),
         modified_at_epoch,
       });
     }
   }
 
   Ok(discovered)
+}
+
+/// Returns frontmatter + first 300 bytes of body to keep IPC payload small.
+fn build_raw_excerpt(raw_content: &str) -> String {
+  let content = raw_content.replace('\r', "");
+
+  let body_start = if content.starts_with("---\n") {
+    content[4..].find("\n---\n").map(|i| 4 + i + 5)
+  } else {
+    None
+  };
+
+  match body_start {
+    Some(start) => {
+      let body = &content[start..];
+      let end = safe_char_boundary(body, 300);
+      format!("{}{}", &content[..start], &body[..end])
+    }
+    None => {
+      let end = safe_char_boundary(&content, 500);
+      content[..end].to_string()
+    }
+  }
+}
+
+fn safe_char_boundary(s: &str, max: usize) -> usize {
+  let mut end = s.len().min(max);
+  while end > 0 && !s.is_char_boundary(end) {
+    end -= 1;
+  }
+  end
+}
+
+#[tauri::command]
+fn get_skill_content(skill_file: String) -> Result<String, String> {
+  fs::read_to_string(&skill_file).map_err(|err| format!("读取 Skill 内容失败：{err}"))
 }
 
 #[tauri::command]
@@ -293,25 +329,27 @@ fn copy_source(request: CopySourceRequest) -> Result<CopySourceResult, String> {
 
   skill_paths.sort();
 
-  let mut conflict_paths = Vec::new();
-  for relative_path in &skill_paths {
-    let source_skill_dir = source_root.join(skill_relative_dir(relative_path)?);
-    let inspection = inspect_copy_target(&source_skill_dir, relative_path, &target_root)?;
-    if let Some(conflict) = inspection.conflict {
-      conflict_paths.push(conflict.final_relative_path);
+  if request.conflict_strategy.is_none() {
+    let mut conflict_paths = Vec::new();
+    for relative_path in &skill_paths {
+      let source_skill_dir = source_root.join(skill_relative_dir(relative_path)?);
+      let inspection = inspect_copy_target(&source_skill_dir, relative_path, &target_root)?;
+      if let Some(conflict) = inspection.conflict {
+        conflict_paths.push(conflict.final_relative_path);
+      }
     }
-  }
 
-  if request.conflict_strategy.is_none() && !conflict_paths.is_empty() {
-    return Ok(CopySourceResult {
-      status: "conflict".into(),
-      copied_count: 0,
-      skipped_count: 0,
-      overwritten_count: 0,
-      renamed_count: 0,
-      conflict_count: conflict_paths.len(),
-      conflict_relative_paths: conflict_paths,
-    });
+    if !conflict_paths.is_empty() {
+      return Ok(CopySourceResult {
+        status: "conflict".into(),
+        copied_count: 0,
+        skipped_count: 0,
+        overwritten_count: 0,
+        renamed_count: 0,
+        conflict_count: conflict_paths.len(),
+        conflict_relative_paths: conflict_paths,
+      });
+    }
   }
 
   let strategy = request.conflict_strategy.as_deref().unwrap_or("skip");
@@ -353,31 +391,29 @@ fn copy_source(request: CopySourceRequest) -> Result<CopySourceResult, String> {
 
 #[tauri::command]
 fn open_path(path: String) -> Result<(), String> {
-  let target = PathBuf::from(path);
+  let target = PathBuf::from(&path);
   if !target.exists() {
     return Err("路径不存在。".into());
   }
 
-  if cfg!(target_os = "windows") {
+  let spawn_result = if cfg!(target_os = "windows") {
     if target.is_dir() {
-      Command::new("explorer")
-        .arg(target.as_os_str())
-        .spawn()
-        .map_err(|err| format!("打开目录失败：{err}"))?;
+      Command::new("explorer").arg(target.as_os_str()).spawn()
     } else {
       Command::new("cmd")
-        .arg("/C")
-        .arg("start")
-        .arg("")
+        .args(["/C", "start", ""])
         .arg(target.as_os_str())
         .spawn()
-        .map_err(|err| format!("打开文件失败：{err}"))?;
     }
+  } else if cfg!(target_os = "macos") {
+    Command::new("open").arg(target.as_os_str()).spawn()
+  } else if cfg!(target_os = "linux") {
+    Command::new("xdg-open").arg(target.as_os_str()).spawn()
+  } else {
+    return Err("当前系统暂未实现打开路径功能。".into());
+  };
 
-    return Ok(());
-  }
-
-  Err("当前系统暂未实现打开路径功能。".into())
+  spawn_result.map(|_| ()).map_err(|err| format!("打开路径失败：{err}"))
 }
 
 fn collect_extras(skill_dir: &Path) -> Vec<String> {
@@ -907,6 +943,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       get_default_sources,
       scan_skills,
+      get_skill_content,
       save_skill,
       copy_skill,
       copy_source,

@@ -16,7 +16,7 @@ export interface RawSkillRecord {
   skillFile: string
   relativePath: string
   extras: string[]
-  rawContent: string
+  rawExcerpt: string
   modifiedAtEpoch?: number | null
 }
 
@@ -30,6 +30,7 @@ export interface SkillRecord extends RawSkillRecord {
   namespace?: string
   previewBody: string
   tags: string[]
+  searchIndex: string
 }
 
 export interface SaveSkillRequest {

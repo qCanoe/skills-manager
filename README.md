@@ -19,7 +19,12 @@
 - 直接新建、编辑、复制单个 skill，或批量复制整个来源并处理冲突
 - 通过来源开关、可写筛选和托盘入口，把日常 skill 维护流程收拢成一个统一入口
 
-<img src="image/readme/image.png" alt="Skills Manager 概览" width="400" />
+<table>
+  <tr>
+    <td><img src="image/readme/image1.png" alt="Skills Manager 主界面" width="400" /></td>
+    <td><img src="image/readme/image2.png" alt="Skills Manager 复制" width="400" /></td>
+  </tr>
+</table>
 
 
 ## 功能特性

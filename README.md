@@ -2,7 +2,7 @@
 
 # Skills Manager
 
-一个基于 `Tauri` + `React` 构建的超轻量indows托盘插件，用来集中管理 `Cursor`、`Codex` 和自定义目录中的 `SKILL.md`。
+一个基于 `Tauri` + `React` 构建的超轻量 Windows 托盘插件，用来集中管理 `Cursor`、`Codex` 和自定义目录中的 `SKILL.md`。
 
 [概览](#概览) • [功能特性](#功能特性) • [快速开始](#快速开始) • [使用方式](#使用方式) • [Skill 目录结构](#skill-目录结构) • [开发说明](#开发说明) • [Roadmap](#roadmap)
 
@@ -240,9 +240,23 @@ Describe how the agent should use this skill.
 ### 当前实现注意点
 
 - 浏览器模式下不提供真实文件系统能力，仅用于 UI 预览
-- 打开路径功能当前只实现了 Windows 分支，属于 Windows-first 桌面工具
+- 「在资源管理器 / Finder 中打开」在 Windows（`explorer` / `start`）、macOS（`open`）与 Linux（`xdg-open`）上均有实现；托盘与主要交互仍以 Windows 为优先验证环境
 - 自定义来源是手动输入路径，不是原生目录选择器
 - 不存在或不可访问的来源目录会在扫描时被跳过
+
+### 版本号
+
+发布或打标签时请同步以下三处版本，避免安装包与文档不一致：
+
+| 位置 | 文件 |
+| --- | --- |
+| 前端与脚本 | `package.json` 的 `version` |
+| Tauri 产物 | `src-tauri/tauri.conf.json` 的 `version` |
+| Rust 包 | `src-tauri/Cargo.toml` 的 `version` |
+
+### 持续集成
+
+推送至默认分支或发起 PR 时，GitHub Actions 会运行前端 `lint`、`build` 以及 `src-tauri` 的 `cargo test`。详见仓库内 `.github/workflows/ci.yml`。
 
 ## 为什么这个项目有用
 

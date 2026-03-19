@@ -727,117 +727,6 @@ fn copy_directory(source_dir: &Path, target_dir: &Path) -> Result<(), String> {
   Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-  use super::*;
-  use std::time::{SystemTime, UNIX_EPOCH};
-
-  fn temp_path(name: &str) -> PathBuf {
-    let unique = SystemTime::now()
-      .duration_since(UNIX_EPOCH)
-      .expect("time works")
-      .as_nanos();
-
-    std::env::temp_dir().join(format!("skills-manager-{name}-{unique}"))
-  }
-
-  #[test]
-  fn copy_skill_directory_copies_to_target_root() {
-    let workspace = temp_path("copy-skill");
-    let source_root = workspace.join("source");
-    let source_dir = source_root.join("alpha");
-    let target_root = workspace.join("target");
-
-    fs::create_dir_all(&source_dir).expect("create source");
-    fs::create_dir_all(&target_root).expect("create target");
-    fs::write(source_dir.join("SKILL.md"), "# alpha").expect("write skill");
-    fs::write(source_dir.join("notes.txt"), "extra").expect("write extra");
-
-    let result = copy_skill_directory(
-      &source_dir,
-      Path::new("alpha/SKILL.md"),
-      &target_root,
-      "rename",
-    )
-    .expect("copy succeeds");
-
-    assert!(matches!(result.status, CopyStatus::Copied));
-    assert_eq!(result.final_relative_path, "alpha/SKILL.md");
-    assert!(target_root.join("alpha/SKILL.md").exists());
-    assert!(target_root.join("alpha/notes.txt").exists());
-
-    let _ = fs::remove_dir_all(workspace);
-  }
-
-  #[test]
-  fn copy_skill_directory_renames_on_conflict() {
-    let workspace = temp_path("copy-rename");
-    let source_root = workspace.join("source");
-    let source_dir = source_root.join("alpha");
-    let target_root = workspace.join("target");
-    let target_dir = target_root.join("alpha");
-
-    fs::create_dir_all(&source_dir).expect("create source");
-    fs::create_dir_all(&target_dir).expect("create target");
-    fs::write(source_dir.join("SKILL.md"), "# alpha").expect("write source skill");
-    fs::write(target_dir.join("SKILL.md"), "# existing").expect("write target skill");
-
-    let result = copy_skill_directory(
-      &source_dir,
-      Path::new("alpha/SKILL.md"),
-      &target_root,
-      "rename",
-    )
-    .expect("copy succeeds");
-
-    assert!(matches!(result.status, CopyStatus::Renamed));
-    assert_eq!(result.final_relative_path, "alpha-copy/SKILL.md");
-    assert!(target_root.join("alpha-copy/SKILL.md").exists());
-
-    let _ = fs::remove_dir_all(workspace);
-  }
-
-  #[test]
-  fn copy_skill_directory_blocks_self_overwrite() {
-    let workspace = temp_path("copy-self");
-    let source_root = workspace.join("source");
-    let source_dir = source_root.join("alpha");
-
-    fs::create_dir_all(&source_dir).expect("create source");
-    fs::write(source_dir.join("SKILL.md"), "# alpha").expect("write skill");
-
-    let error = copy_skill_directory(
-      &source_dir,
-      Path::new("alpha/SKILL.md"),
-      &source_root,
-      "overwrite",
-    )
-    .expect_err("self overwrite must fail");
-
-    assert!(error.contains("无法覆盖自身"));
-
-    let _ = fs::remove_dir_all(workspace);
-  }
-
-  #[test]
-  fn copy_skill_directory_rejects_root_level_skill() {
-    let workspace = temp_path("copy-root");
-    let source_root = workspace.join("source");
-    let target_root = workspace.join("target");
-
-    fs::create_dir_all(&source_root).expect("create source");
-    fs::create_dir_all(&target_root).expect("create target");
-    fs::write(source_root.join("SKILL.md"), "# root").expect("write skill");
-
-    let error = copy_skill_directory(&source_root, Path::new("SKILL.md"), &target_root, "rename")
-      .expect_err("root level skill must fail");
-
-    assert!(error.contains("来源根目录"));
-
-    let _ = fs::remove_dir_all(workspace);
-  }
-}
-
 fn position_bottom_right(app: &AppHandle) {
   let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) else {
     return;
@@ -951,4 +840,115 @@ pub fn run() {
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use std::time::{SystemTime, UNIX_EPOCH};
+
+  fn temp_path(name: &str) -> PathBuf {
+    let unique = SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .expect("time works")
+      .as_nanos();
+
+    std::env::temp_dir().join(format!("skills-manager-{name}-{unique}"))
+  }
+
+  #[test]
+  fn copy_skill_directory_copies_to_target_root() {
+    let workspace = temp_path("copy-skill");
+    let source_root = workspace.join("source");
+    let source_dir = source_root.join("alpha");
+    let target_root = workspace.join("target");
+
+    fs::create_dir_all(&source_dir).expect("create source");
+    fs::create_dir_all(&target_root).expect("create target");
+    fs::write(source_dir.join("SKILL.md"), "# alpha").expect("write skill");
+    fs::write(source_dir.join("notes.txt"), "extra").expect("write extra");
+
+    let result = copy_skill_directory(
+      &source_dir,
+      Path::new("alpha/SKILL.md"),
+      &target_root,
+      "rename",
+    )
+    .expect("copy succeeds");
+
+    assert!(matches!(result.status, CopyStatus::Copied));
+    assert_eq!(result.final_relative_path, "alpha/SKILL.md");
+    assert!(target_root.join("alpha/SKILL.md").exists());
+    assert!(target_root.join("alpha/notes.txt").exists());
+
+    let _ = fs::remove_dir_all(workspace);
+  }
+
+  #[test]
+  fn copy_skill_directory_renames_on_conflict() {
+    let workspace = temp_path("copy-rename");
+    let source_root = workspace.join("source");
+    let source_dir = source_root.join("alpha");
+    let target_root = workspace.join("target");
+    let target_dir = target_root.join("alpha");
+
+    fs::create_dir_all(&source_dir).expect("create source");
+    fs::create_dir_all(&target_dir).expect("create target");
+    fs::write(source_dir.join("SKILL.md"), "# alpha").expect("write source skill");
+    fs::write(target_dir.join("SKILL.md"), "# existing").expect("write target skill");
+
+    let result = copy_skill_directory(
+      &source_dir,
+      Path::new("alpha/SKILL.md"),
+      &target_root,
+      "rename",
+    )
+    .expect("copy succeeds");
+
+    assert!(matches!(result.status, CopyStatus::Renamed));
+    assert_eq!(result.final_relative_path, "alpha-copy/SKILL.md");
+    assert!(target_root.join("alpha-copy/SKILL.md").exists());
+
+    let _ = fs::remove_dir_all(workspace);
+  }
+
+  #[test]
+  fn copy_skill_directory_blocks_self_overwrite() {
+    let workspace = temp_path("copy-self");
+    let source_root = workspace.join("source");
+    let source_dir = source_root.join("alpha");
+
+    fs::create_dir_all(&source_dir).expect("create source");
+    fs::write(source_dir.join("SKILL.md"), "# alpha").expect("write skill");
+
+    let error = copy_skill_directory(
+      &source_dir,
+      Path::new("alpha/SKILL.md"),
+      &source_root,
+      "overwrite",
+    )
+    .expect_err("self overwrite must fail");
+
+    assert!(error.contains("无法覆盖自身"));
+
+    let _ = fs::remove_dir_all(workspace);
+  }
+
+  #[test]
+  fn copy_skill_directory_rejects_root_level_skill() {
+    let workspace = temp_path("copy-root");
+    let source_root = workspace.join("source");
+    let target_root = workspace.join("target");
+
+    fs::create_dir_all(&source_root).expect("create source");
+    fs::create_dir_all(&target_root).expect("create target");
+    fs::write(source_root.join("SKILL.md"), "# root").expect("write skill");
+
+    let error = copy_skill_directory(&source_root, Path::new("SKILL.md"), &target_root, "rename")
+      .expect_err("root level skill must fail");
+
+    assert!(error.contains("来源根目录"));
+
+    let _ = fs::remove_dir_all(workspace);
+  }
 }

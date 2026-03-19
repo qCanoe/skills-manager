@@ -1,5 +1,6 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useId, useMemo, useRef, useState, type FormEvent } from 'react'
 
+import { useModalDialog } from '../hooks/useModalDialog'
 import { buildRelativeSkillPath, buildSkillTemplate } from '../lib/skills'
 import { Select } from './Select'
 import type { SkillRecord, SourceConfig } from '../types'
@@ -21,6 +22,10 @@ export function SkillEditor({
   onCancel,
   onSubmit,
 }: SkillEditorProps) {
+  const panelRef = useRef<HTMLElement>(null)
+  const titleId = useId()
+  useModalDialog(panelRef, onCancel)
+
   const [selectedSourceId, setSelectedSourceId] = useState(skill?.sourceId ?? writableSources[0]?.id ?? '')
   const [name, setName] = useState(skill?.name ?? '')
   const [description, setDescription] = useState(skill?.description ?? '')
@@ -59,10 +64,10 @@ export function SkillEditor({
 
   return (
     <div className="modal-backdrop">
-      <section className="modal-panel">
+      <section ref={panelRef} className="modal-panel" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="panel-heading">
           <span className="eyebrow">{mode === 'create' ? '新建 Skill' : '编辑 Skill'}</span>
-          <h2>{mode === 'create' ? '创建新技能包' : skill?.name}</h2>
+          <h2 id={titleId}>{mode === 'create' ? '创建新技能包' : skill?.name}</h2>
         </div>
 
         <form className="editor-form" onSubmit={handleSubmit}>

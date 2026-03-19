@@ -42,6 +42,7 @@ export function Select({ id, value, options, disabled = false, onChange }: Selec
 
     function handleKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
+        e.stopPropagation()
         setOpen(false)
         return
       }

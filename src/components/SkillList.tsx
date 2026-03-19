@@ -1,5 +1,5 @@
 import { ChevronDown, Library } from 'lucide-react'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import clsx from 'clsx'
 
 import type { SkillRecord } from '../types'
@@ -12,6 +12,7 @@ interface SkillListProps {
 
 export function SkillList({ skills, selectedSkillId, onSelectSkill }: SkillListProps) {
   const [collapsed, setCollapsed] = useState(false)
+  const listRegionId = useId()
 
   return (
     <div className="tray-section">
@@ -20,6 +21,7 @@ export function SkillList({ skills, selectedSkillId, onSelectSkill }: SkillListP
         role="button"
         tabIndex={0}
         aria-expanded={!collapsed}
+        aria-controls={listRegionId}
         onClick={() => setCollapsed((v) => !v)}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed((v) => !v) } }}
       >
@@ -33,29 +35,33 @@ export function SkillList({ skills, selectedSkillId, onSelectSkill }: SkillListP
         </div>
       </div>
 
-      {!collapsed ? (
-        <div style={{ padding: '0 8px 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {skills.map((skill) => (
-            <button
-              key={skill.id}
-              className={clsx('skill-row', selectedSkillId === skill.id && 'is-selected')}
-              onClick={() => onSelectSkill(skill.id)}
-              type="button"
-            >
-              <div className="skill-row__content">
-                <div className="skill-row__name">{skill.name}</div>
-                {skill.description ? (
-                  <div className="skill-row__desc">{skill.description}</div>
-                ) : null}
-                <div className="skill-row__meta">
-                  {skill.sourceLabel} · {skill.relativePath}
-                </div>
+      <div
+        id={listRegionId}
+        className="skill-list-region"
+        role="region"
+        aria-label={`Skills 列表，${skills.length} 条`}
+        hidden={collapsed}
+      >
+        {skills.map((skill) => (
+          <button
+            key={skill.id}
+            className={clsx('skill-row', selectedSkillId === skill.id && 'is-selected')}
+            onClick={() => onSelectSkill(skill.id)}
+            type="button"
+          >
+            <div className="skill-row__content">
+              <div className="skill-row__name">{skill.name}</div>
+              {skill.description ? (
+                <div className="skill-row__desc">{skill.description}</div>
+              ) : null}
+              <div className="skill-row__meta">
+                {skill.sourceLabel} · {skill.relativePath}
               </div>
-              {skill.writable ? <div className="badge-writable" title="可编辑" aria-label="可编辑" role="img" /> : null}
-            </button>
-          ))}
-        </div>
-      ) : null}
+            </div>
+            {skill.writable ? <span className="badge-writable" title="可编辑" aria-hidden="true" /> : null}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

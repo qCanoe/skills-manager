@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { ChevronDown, CopyPlus, FilePenLine, FolderOpen, SquareArrowOutUpRight } from 'lucide-react'
 
+import { renderMarkdownToSafeHtml } from '../lib/render-markdown'
 import type { SkillRecord } from '../types'
 
 interface SkillPreviewProps {
@@ -24,25 +25,36 @@ export function SkillPreview({
   const [htmlReady, setHtmlReady] = useState(false)
 
   useEffect(() => {
+    // Reset fade while new markdown is parsed (source changed).
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional UI reset before async sanitize+parse
     setHtmlReady(false)
-    if (!rawContent) { setRenderedHtml(''); return }
+    if (!rawContent) {
+      setRenderedHtml('')
+      return
+    }
     let cancelled = false
-    void import('marked').then(({ marked }) => {
-      marked.setOptions({ breaks: true })
+    void renderMarkdownToSafeHtml(rawContent).then((html) => {
       if (!cancelled) {
-        setRenderedHtml(marked.parse(rawContent) as string)
+        setRenderedHtml(html)
         setHtmlReady(true)
       }
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [rawContent])
 
   const [isScrolling, setIsScrolling] = useState(false)
   const [expanded, setExpanded] = useState(true)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const scrollThrottleRef = useRef(0)
 
   const handleScroll = useCallback(() => {
-    setIsScrolling(true)
+    const now = performance.now()
+    if (now - scrollThrottleRef.current > 80) {
+      scrollThrottleRef.current = now
+      setIsScrolling(true)
+    }
     if (hideTimer.current) clearTimeout(hideTimer.current)
     hideTimer.current = setTimeout(() => setIsScrolling(false), 800)
   }, [])

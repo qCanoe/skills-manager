@@ -1,5 +1,5 @@
 import { ChevronDown, CopyPlus, Download, FolderOpen, FolderPlus, Layers, Trash2, Upload, X } from 'lucide-react'
-import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 
 import { getSourceBadge } from '../lib/sources'
 import type { SourceConfig, SkillRecord } from '../types'
@@ -32,6 +32,7 @@ export function SourceManager({
   onImportSourcesText,
 }: SourceManagerProps) {
   const importInputRef = useRef<HTMLInputElement>(null)
+  const sectionContentId = useId()
   const [collapsed, setCollapsed] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
   const [label, setLabel] = useState('')
@@ -96,6 +97,7 @@ export function SourceManager({
         role="button"
         tabIndex={0}
         aria-expanded={!collapsed}
+        aria-controls={sectionContentId}
         onClick={() => setCollapsed((v) => !v)}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed((v) => !v) } }}
       >
@@ -109,7 +111,13 @@ export function SourceManager({
         </div>
       </div>
 
-      <div className={`tray-section-content ${collapsed ? 'is-collapsed' : ''}`}>
+      <div
+        id={sectionContentId}
+        className="tray-section-content"
+        role="region"
+        aria-label="来源列表与管理"
+        hidden={collapsed}
+      >
         <div className="source-chips">
           <button
             className={`source-chip ${activeSourceId === 'all' ? 'is-active' : ''}`}

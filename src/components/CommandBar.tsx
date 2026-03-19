@@ -1,4 +1,5 @@
 import { BookOpen, Filter, Plus, RefreshCw, Search, X } from 'lucide-react'
+import { useRef } from 'react'
 
 interface CommandBarProps {
   searchValue: string
@@ -21,6 +22,8 @@ export function CommandBar({
   onRefresh,
   onCreate,
 }: CommandBarProps) {
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
   return (
     <>
       <header className="tray-titlebar">
@@ -58,13 +61,11 @@ export function CommandBar({
         <div
           role="search"
           className={`search-field${searchValue ? ' search-field--has-value' : ''}`}
-          onClick={() => {
-            const input = document.querySelector<HTMLInputElement>('.search-field input')
-            input?.focus()
-          }}
+          onClick={() => searchInputRef.current?.focus()}
         >
           <Search size={13} className="search-field__icon" aria-hidden="true" />
           <input
+            ref={searchInputRef}
             aria-label="搜索"
             value={searchValue}
             onChange={(event) => onSearchChange(event.target.value)}
@@ -77,7 +78,6 @@ export function CommandBar({
               type="button"
               aria-label="清除搜索"
               onClick={() => onSearchChange('')}
-              tabIndex={-1}
             >
               <X size={11} strokeWidth={2.5} />
             </button>

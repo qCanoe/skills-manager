@@ -322,8 +322,10 @@ function App() {
       setErrorMessage('导入失败：文件不是有效的来源配置（schemaVersion 必须为 1）。')
       return
     }
-    const proceed = window.confirm(
+    const { confirm } = await import('@tauri-apps/plugin-dialog')
+    const proceed = await confirm(
       '将用文件中的自定义来源替换当前列表，并同步默认来源的启用状态。是否继续？',
+      { title: '导入来源配置', kind: 'warning' },
     )
     if (!proceed) return
     setErrorMessage(null)
@@ -513,7 +515,7 @@ function App() {
 
       {/* Error banner */}
       {errorMessage ? (
-        <div className="status-banner">
+        <div className="status-banner" role="alert">
           <AlertTriangle size={13} aria-hidden="true" />
           <span>{errorMessage}</span>
           <button

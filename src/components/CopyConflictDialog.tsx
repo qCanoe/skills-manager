@@ -1,5 +1,7 @@
+import { useId, useRef, type ReactNode } from 'react'
 import { Copy, FilePlus2, SkipForward } from 'lucide-react'
 
+import { useModalDialog } from '../hooks/useModalDialog'
 import type { CopyConflictStrategy } from '../types'
 
 interface CopyConflictDialogProps {
@@ -15,7 +17,7 @@ interface CopyConflictDialogProps {
 const STRATEGY_OPTIONS: Array<{
   id: CopyConflictStrategy
   modifier: string
-  icon: React.ReactNode
+  icon: ReactNode
   label: string
   description: string
 }> = [
@@ -51,12 +53,22 @@ export function CopyConflictDialog({
   onCancel,
   onConfirm,
 }: CopyConflictDialogProps) {
+  const panelRef = useRef<HTMLElement>(null)
+  const titleId = useId()
+  useModalDialog(panelRef, onCancel)
+
   return (
     <div className="modal-backdrop">
-      <section className="modal-panel modal-panel--compact modal-panel--wide">
+      <section
+        ref={panelRef}
+        className="modal-panel modal-panel--compact modal-panel--wide"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
         <div className="panel-heading">
           <span className="eyebrow conflict-eyebrow">检测到冲突</span>
-          <h2>{title}</h2>
+          <h2 id={titleId}>{title}</h2>
         </div>
 
         <div className="copy-dialog">

@@ -231,7 +231,7 @@ Describe how the agent should use this skill.
 - 前端：`React 19`、`TypeScript 5.9`、`Vite 8`
 - 桌面层：`Tauri 2`
 - 后端：`Rust 2021`
-- 主要依赖：`@tauri-apps/api`、`lucide-react`、`clsx`、`marked`、`walkdir`、`serde`
+- 主要依赖：`@tauri-apps/api`、`lucide-react`、`clsx`、`marked`、`dompurify`（预览 HTML 消毒）、`walkdir`、`serde`
 
 ### 代码职责
 
@@ -241,7 +241,7 @@ Describe how the agent should use this skill.
 
 ### 当前实现注意点
 
-- 浏览器模式下不提供真实文件系统能力，仅用于 UI 预览
+- 浏览器模式下不提供真实文件系统能力，仅用于 UI 预览；详情区 Markdown 预览经 **DOMPurify** 消毒后再插入 DOM，降低恶意 `SKILL.md` 的脚本注入风险
 - 「在资源管理器 / Finder 中打开」在 Windows（`explorer` / `start`）、macOS（`open`）与 Linux（`xdg-open`）上均有实现；托盘与主要交互仍以 Windows 为优先验证环境
 - 桌面版下添加自定义来源时可使用原生文件夹选择对话框；导入配置仅替换自定义来源列表，默认路径仍来自本机 `get_default_sources`
 - 不存在或不可访问的来源目录会在扫描时被跳过

@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import { FolderInput } from 'lucide-react'
 
+import { useModalDialog } from '../hooks/useModalDialog'
 import { isSameSourcePath } from '../lib/sources'
 import type { SkillRecord, SourceConfig } from '../types'
 
@@ -13,6 +14,10 @@ interface CopyDialogProps {
 }
 
 export function CopyDialog({ skill, sources, onCancel, onConfirm, onConfirmCustom }: CopyDialogProps) {
+  const panelRef = useRef<HTMLElement>(null)
+  const titleId = useId()
+  useModalDialog(panelRef, onCancel)
+
   const isRootLevelSkill = !skill.relativePath.includes('/')
   const [showCustom, setShowCustom] = useState(false)
   const [customPath, setCustomPath] = useState('')
@@ -30,10 +35,16 @@ export function CopyDialog({ skill, sources, onCancel, onConfirm, onConfirmCusto
 
   return (
     <div className="modal-backdrop">
-      <section className="modal-panel modal-panel--compact">
+      <section
+        ref={panelRef}
+        className="modal-panel modal-panel--compact"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
         <div className="panel-heading">
           <span className="eyebrow">来自 {skill.sourceLabel}</span>
-          <h2>{skill.name}</h2>
+          <h2 id={titleId}>{skill.name}</h2>
         </div>
 
         <div className="copy-dialog">
@@ -69,7 +80,10 @@ export function CopyDialog({ skill, sources, onCancel, onConfirm, onConfirmCusto
                       if (e.key === 'Enter' && customPath.trim()) {
                         onConfirmCustom(customPath.trim(), skill.relativePath)
                       }
-                      if (e.key === 'Escape') setShowCustom(false)
+                      if (e.key === 'Escape') {
+                        e.stopPropagation()
+                        setShowCustom(false)
+                      }
                     }}
                   />
                   <div className="copy-target-card__custom-actions">

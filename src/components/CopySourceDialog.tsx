@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
+import { useId, useMemo, useRef } from 'react'
 
+import { useModalDialog } from '../hooks/useModalDialog'
 import { isSameSourcePath } from '../lib/sources'
 import type { SourceConfig } from '../types'
 
@@ -18,6 +19,10 @@ export function CopySourceDialog({
   onCancel,
   onConfirm,
 }: CopySourceDialogProps) {
+  const panelRef = useRef<HTMLElement>(null)
+  const titleId = useId()
+  useModalDialog(panelRef, onCancel)
+
   const targets = useMemo(
     () =>
       sources.filter(
@@ -31,10 +36,16 @@ export function CopySourceDialog({
 
   return (
     <div className="modal-backdrop">
-      <section className="modal-panel modal-panel--compact">
+      <section
+        ref={panelRef}
+        className="modal-panel modal-panel--compact"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
         <div className="panel-heading">
           <span className="eyebrow">来自 {source.label}</span>
-          <h2>{skillCount} 个 skills</h2>
+          <h2 id={titleId}>{skillCount} 个 skills</h2>
         </div>
 
         <div className="copy-dialog">

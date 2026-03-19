@@ -1,5 +1,5 @@
-import { ChevronDown, CopyPlus, FolderPlus, Layers, Trash2, X } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { ChevronDown, CopyPlus, Download, FolderOpen, FolderPlus, Layers, Trash2, Upload, X } from 'lucide-react'
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 
 import { getSourceBadge } from '../lib/sources'
 import type { SourceConfig, SkillRecord } from '../types'
@@ -8,29 +8,71 @@ interface SourceManagerProps {
   sources: SourceConfig[]
   activeSourceId: string
   skills: SkillRecord[]
+  desktopFeatures: boolean
   onSelectSource: (sourceId: string) => void
   onToggleSource: (sourceId: string) => void
   onAddCustomSource: (label: string, path: string, writable: boolean) => boolean
   onCopySource: (source: SourceConfig) => void
   onRemoveSource: (sourceId: string) => void
+  onExportSources?: () => void | Promise<void>
+  onImportSourcesText?: (json: string) => void | Promise<void>
 }
 
 export function SourceManager({
   sources,
   activeSourceId,
   skills,
+  desktopFeatures,
   onSelectSource,
   onToggleSource,
   onAddCustomSource,
   onCopySource,
   onRemoveSource,
+  onExportSources,
+  onImportSourcesText,
 }: SourceManagerProps) {
+  const importInputRef = useRef<HTMLInputElement>(null)
   const [collapsed, setCollapsed] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
   const [label, setLabel] = useState('')
   const [path, setPath] = useState('')
   const [writable, setWritable] = useState(true)
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
+
+  const pickFolder = async () => {
+    if (!desktopFeatures) return
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog')
+      const selected = await open({
+        title: '选择 skills 根目录',
+        directory: true,
+        multiple: false,
+      })
+      if (typeof selected === 'string' && selected) {
+        setPath(selected)
+        return
+      }
+      if (Array.isArray(selected) && selected[0]) {
+        setPath(selected[0])
+      }
+    } catch {
+      /* dialog cancelled or unavailable */
+    }
+  }
+
+  const triggerImport = () => importInputRef.current?.click()
+
+  const handleImportFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !onImportSourcesText) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const text = typeof reader.result === 'string' ? reader.result : ''
+      void onImportSourcesText(text)
+    }
+    reader.readAsText(file)
+  }
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -179,7 +221,7 @@ export function SourceManager({
           })}
         </div>
 
-        <div style={{ padding: '8px 0 0' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 0 0' }}>
           <button
             className="ghost-button ghost-button--wide"
             onClick={() => setShowAddForm((v) => !v)}
@@ -188,6 +230,26 @@ export function SourceManager({
             <FolderPlus size={14} />
             {showAddForm ? '取消添加' : '添加自定义来源'}
           </button>
+
+          {desktopFeatures && onExportSources && onImportSourcesText ? (
+            <div className="source-config-io">
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".json,application/json"
+                style={{ display: 'none' }}
+                onChange={handleImportFile}
+              />
+              <button className="ghost-button ghost-button--wide" onClick={() => void onExportSources()} type="button">
+                <Download size={14} />
+                导出来源配置
+              </button>
+              <button className="ghost-button ghost-button--wide" onClick={triggerImport} type="button">
+                <Upload size={14} />
+                导入来源配置
+              </button>
+            </div>
+          ) : null}
         </div>
 
         {showAddForm ? (
@@ -205,13 +267,25 @@ export function SourceManager({
 
             <div className="field-group">
               <label className="field-label" htmlFor="source-add-path">文件夹路径</label>
-              <input
-                id="source-add-path"
-                className="field-input"
-                value={path}
-                onChange={(e) => setPath(e.target.value)}
-                placeholder="C:\Users\you\skills"
-              />
+              <div className="field-row">
+                <input
+                  id="source-add-path"
+                  className="field-input"
+                  value={path}
+                  onChange={(e) => setPath(e.target.value)}
+                  placeholder="C:\Users\you\skills"
+                />
+                <button
+                  className="ghost-button"
+                  disabled={!desktopFeatures}
+                  onClick={() => void pickFolder()}
+                  title={desktopFeatures ? '使用系统对话框选择文件夹' : '仅在桌面应用中可用'}
+                  type="button"
+                >
+                  <FolderOpen size={14} />
+                  浏览…
+                </button>
+              </div>
             </div>
 
             <label className="field-check">

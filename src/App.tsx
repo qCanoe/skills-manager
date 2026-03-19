@@ -15,7 +15,17 @@ import { SkillPreview } from './components/SkillPreview'
 import { SourceManager } from './components/SourceManager'
 import { ToastContainer, type ToastMessage } from './components/Toast'
 import { normalizeSkills } from './lib/skills'
-import { createCustomSource, isSameSourcePath, loadStoredSources, normalizePathInput, persistSources } from './lib/sources'
+import {
+  buildSourcesExport,
+  createCustomSource,
+  isSameSourcePath,
+  loadStoredSources,
+  mergeImportedSources,
+  normalizePathInput,
+  parseSourcesExportJson,
+  persistSources,
+  stringifySourcesExport,
+} from './lib/sources'
 import { loadActiveSource, loadWritableOnly, persistActiveSource, persistWritableOnly } from './lib/ui-state'
 import type {
   CopyConflictStrategy,
@@ -283,6 +293,50 @@ function App() {
     return true
   }
 
+  const handleExportSources = useCallback(async () => {
+    if (!isTauriRuntime()) return
+    setErrorMessage(null)
+    try {
+      const defaults = await invoke<SourceConfig[]>('get_default_sources')
+      const defaultIds = new Set(defaults.map((s) => s.id))
+      const payload = buildSourcesExport(sources, defaultIds)
+      const json = stringifySourcesExport(payload)
+      const { save } = await import('@tauri-apps/plugin-dialog')
+      const path = await save({
+        title: '导出来源配置',
+        defaultPath: 'skills-manager-sources.json',
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      })
+      if (path == null) return
+      await invoke('write_text_file', { path, contents: json })
+      setStatusLine('已导出来源配置。')
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error))
+    }
+  }, [sources])
+
+  const handleImportSourcesText = useCallback(async (json: string) => {
+    if (!isTauriRuntime()) return
+    const parsed = parseSourcesExportJson(json)
+    if (!parsed) {
+      setErrorMessage('导入失败：文件不是有效的来源配置（schemaVersion 必须为 1）。')
+      return
+    }
+    const proceed = window.confirm(
+      '将用文件中的自定义来源替换当前列表，并同步默认来源的启用状态。是否继续？',
+    )
+    if (!proceed) return
+    setErrorMessage(null)
+    try {
+      const defaults = await invoke<SourceConfig[]>('get_default_sources')
+      setSources(mergeImportedSources(defaults, parsed))
+      setActiveSourceId('all')
+      setStatusLine(`已导入来源配置（导出时间 ${parsed.exportedAt}）。`)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error))
+    }
+  }, [])
+
   const handleToggleSource = (sourceId: string) => {
     setSources((current) =>
       current.map((source) =>
@@ -480,11 +534,14 @@ function App() {
           activeSourceId={activeSourceId}
           sources={sources}
           skills={skills}
+          desktopFeatures={bootstrapped && isTauriRuntime()}
           onSelectSource={setActiveSourceId}
           onToggleSource={handleToggleSource}
           onAddCustomSource={handleAddCustomSource}
           onCopySource={setCopyingSource}
           onRemoveSource={handleRemoveSource}
+          onExportSources={bootstrapped && isTauriRuntime() ? handleExportSources : undefined}
+          onImportSourcesText={bootstrapped && isTauriRuntime() ? handleImportSourcesText : undefined}
         />
 
         {/* Selected skill detail drawer */}

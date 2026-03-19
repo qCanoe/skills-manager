@@ -855,6 +855,23 @@
   gap: 6px;
 }
 
+.field-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.field-row .field-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.field-row .ghost-button {
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding-inline: 10px;
+}
+
 .field-label {
   font-size: 0.75rem;
   font-weight: 500;
@@ -895,6 +912,12 @@
   font-size: 0.8rem;
   color: var(--text);
   cursor: pointer;
+}
+
+.source-config-io {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 /* ── Status Strip ─────────────────────────────────────────────── */

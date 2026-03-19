@@ -188,8 +188,8 @@ fn scan_skills(sources: Vec<SourceConfig>) -> Result<Vec<DiscoveredSkill>, Strin
 fn build_raw_excerpt(raw_content: &str) -> String {
   let content = raw_content.replace('\r', "");
 
-  let body_start = if content.starts_with("---\n") {
-    content[4..].find("\n---\n").map(|i| 4 + i + 5)
+  let body_start = if let Some(rest) = content.strip_prefix("---\n") {
+    rest.find("\n---\n").map(|i| 4 + i + 5)
   } else {
     None
   };
@@ -414,6 +414,20 @@ fn open_path(path: String) -> Result<(), String> {
   };
 
   spawn_result.map(|_| ()).map_err(|err| format!("打开路径失败：{err}"))
+}
+
+#[tauri::command]
+fn write_text_file(path: String, contents: String) -> Result<(), String> {
+  let target = PathBuf::from(path.trim());
+  if target.as_os_str().is_empty() {
+    return Err("路径无效。".into());
+  }
+  if let Some(parent) = target.parent() {
+    if !parent.as_os_str().is_empty() {
+      fs::create_dir_all(parent).map_err(|err| format!("创建目录失败：{err}"))?;
+    }
+  }
+  fs::write(&target, contents).map_err(|err| format!("写入文件失败：{err}"))
 }
 
 fn collect_extras(skill_dir: &Path) -> Vec<String> {
@@ -807,7 +821,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         ..
       } = event
       {
-        toggle_main_window(&tray.app_handle());
+        toggle_main_window(tray.app_handle());
       }
     })
     .build(app)?;
@@ -818,9 +832,10 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
+    .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build())
     .setup(|app| {
-      build_tray(&app.handle())?;
+      build_tray(app.handle())?;
       Ok(())
     })
     .on_window_event(|window, event| {
@@ -836,7 +851,8 @@ pub fn run() {
       save_skill,
       copy_skill,
       copy_source,
-      open_path
+      open_path,
+      write_text_file
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

@@ -31,7 +31,7 @@
 
 - 多来源聚合：同时扫描多个 skill 根目录，并支持按来源筛选
 - 默认来源开箱即用：内置 `Cursor / Personal`、`Codex / Personal` 和 `Cursor / Built-in`
-- 自定义来源管理：支持手动添加、启用/停用和删除自定义目录
+- 自定义来源管理：支持手动或系统文件夹对话框添加、启用/停用和删除自定义目录；支持将来源配置 **导出 / 导入 JSON** 以便备份或多机同步
 - Skill 检索：按名称、描述、来源、相对路径和正文摘要进行搜索
 - 只看可编辑内容：一键过滤只读来源，聚焦可修改的 skill
 - 原始内容预览：查看完整 `SKILL.md`、路径、命名空间和目录附件
@@ -115,13 +115,15 @@ npm run tauri dev
 
 ### 2. 添加自定义来源
 
-在“来源”区域中可以手动输入：
+在“来源”区域中可以：
 
-- 来源名称
-- 文件夹路径
-- 是否为可编辑来源
+- 输入来源名称与文件夹路径（可点击 **浏览…** 使用系统文件夹选择对话框）
+- 选择是否为可编辑来源
+- 使用 **导出来源配置** / **导入来源配置** 将自定义来源与默认来源的启用状态存为 JSON（导入会替换现有自定义来源并应用文件中的默认来源开关）
 
 来源配置和启用状态会保存在本地 `localStorage` 中，因此重新打开应用后仍会保留。
+
+导出文件为 JSON，`schemaVersion` 当前为 `1`，包含 `customSources`（完整条目）与 `defaultSourceFlags`（仅默认来源 id 与 `enabled`）。在本机导入时，默认来源的 `rootPath` 仍以当前环境与 `get_default_sources` 为准，避免把另一台机器的路径写死进来。
 
 ### 3. 浏览与筛选
 
@@ -241,7 +243,7 @@ Describe how the agent should use this skill.
 
 - 浏览器模式下不提供真实文件系统能力，仅用于 UI 预览
 - 「在资源管理器 / Finder 中打开」在 Windows（`explorer` / `start`）、macOS（`open`）与 Linux（`xdg-open`）上均有实现；托盘与主要交互仍以 Windows 为优先验证环境
-- 自定义来源是手动输入路径，不是原生目录选择器
+- 桌面版下添加自定义来源时可使用原生文件夹选择对话框；导入配置仅替换自定义来源列表，默认路径仍来自本机 `get_default_sources`
 - 不存在或不可访问的来源目录会在扫描时被跳过
 
 ### 版本号
@@ -256,7 +258,7 @@ Describe how the agent should use this skill.
 
 ### 持续集成
 
-推送至默认分支或发起 PR 时，GitHub Actions 会运行前端 `lint`、`build` 以及 `src-tauri` 的 `cargo test`。详见仓库内 `.github/workflows/ci.yml`。
+推送至默认分支或发起 PR 时，GitHub Actions 会运行前端 `lint`、`test`、`build` 以及 `src-tauri` 的 `cargo clippy` 与 `cargo test`。详见仓库内 `.github/workflows/ci.yml`。
 
 ## 为什么这个项目有用
 
@@ -271,8 +273,8 @@ Describe how the agent should use this skill.
 
 ## Roadmap
 
-- [ ] **原生目录选择器**：添加来源时使用系统级文件夹选择对话框，替代手动输入路径
+- [x] **原生目录选择器**：添加来源时使用系统级文件夹选择对话框（仍支持手输路径）
 - [ ] **Skill 模板库**：内置常用 skill 模板，新建时可选
 - [ ] **热门 skill 推荐**：展示常用、热门 skill，便于发现与安装
 - [ ] **Find Skill 内嵌支持**：集成 find-skill 能力，在应用内直接搜索与安装 skill
-- [ ] **导入 / 导出配置**：来源配置的备份与恢复，便于多机同步
+- [x] **导入 / 导出配置**：来源配置的备份与恢复（JSON），便于多机同步

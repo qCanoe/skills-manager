@@ -1,4 +1,14 @@
 :root {
+  /* Spacing scale — use for layout rhythm (tight groups vs. section breaks) */
+  --space-3xs: 6px;
+  --space-2xs: 8px;
+  --space-xs: 10px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 20px;
+  --space-xl: 28px;
+  --space-2xl: 40px;
+
   /* Apple Light Mode Palette */
   --bg: #f5f5f7; /* System Gray 6 Light */
   --bg-panel: #ffffff; /* System Background Light */

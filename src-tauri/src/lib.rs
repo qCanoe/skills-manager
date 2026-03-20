@@ -121,6 +121,14 @@ fn get_default_sources() -> Result<Vec<SourceConfig>, String> {
       kind: "codex".into(),
       enabled: true,
     },
+    SourceConfig {
+      id: "claude-personal".into(),
+      label: "Claude".into(),
+      root_path: home_join(&[".claude", "skills"])?,
+      writable: true,
+      kind: "claude".into(),
+      enabled: true,
+    },
   ])
 }
 

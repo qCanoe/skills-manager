@@ -2,7 +2,7 @@
 
 # Skills Manager
 
-一个基于 `Tauri` + `React` 构建的超轻量 Windows 托盘插件，用来集中管理 `Cursor`、`Codex` 和自定义目录中的 `SKILL.md`。
+一个基于 `Tauri` + `React` 构建的超轻量 Windows 托盘插件，用来集中管理 `Cursor`、`Codex`、`Claude` 和自定义目录中的 `SKILL.md`。
 
 [概览](#概览) • [功能特性](#功能特性) • [快速开始](#快速开始) • [使用方式](#使用方式) • [Skill 目录结构](#skill-目录结构) • [开发说明](#开发说明) • [Roadmap](#roadmap)
 
@@ -30,14 +30,14 @@
 ## 功能特性
 
 - 多来源聚合：同时扫描多个 skill 根目录，并支持按来源筛选
-- 默认来源开箱即用：内置 `Cursor / Personal`、`Codex / Personal` 和 `Cursor / Built-in`
+- 默认来源开箱即用：内置 `Cursor`、`Codex`、`Claude` 个人 skills 目录
 - 自定义来源管理：支持手动或系统文件夹对话框添加、启用/停用和删除自定义目录；支持将来源配置 **导出 / 导入 JSON** 以便备份或多机同步
 - Skill 检索：按名称、描述、来源、相对路径和正文摘要进行搜索
 - 只看可编辑内容：一键过滤只读来源，聚焦可修改的 skill
 - 原始内容预览：查看完整 `SKILL.md`、路径、命名空间和目录附件
 - 新建与编辑：自动生成标准模板，并按 `[namespace/]<slug>/SKILL.md` 组织路径
 - 跨来源复制：支持复制单个 skill 或整个来源到目标，可复制到内置来源或自定义路径，冲突时支持 `rename`、`overwrite`、`skip`
-- 桌面托盘交互：支持显示/隐藏窗口、重新扫描和退出应用
+- 桌面托盘交互：支持显示/隐藏窗口、重新扫描和退出应用；从其他窗口切回应用时会自动静默重新扫描
 - 快捷浏览：支持方向键在 skill 列表间移动
 
 ## 快速开始
@@ -105,9 +105,9 @@ npm run tauri dev
 
 | 来源                  | 默认路径                      | 可写  | 说明               |
 | ------------------- | ------------------------- | --- | ---------------- |
-| `Cursor / Personal` | `~/.cursor/skills`        | 是   | 个人 Cursor skills |
-| `Codex / Personal`  | `~/.codex/skills`         | 是   | 个人 Codex skills  |
-| `Cursor / Built-in` | `~/.cursor/skills-cursor` | 否   | 内置技能，默认只读        |
+| `Cursor`            | `~/.cursor/skills`  | 是   | 个人 Cursor skills |
+| `Codex`             | `~/.codex/skills`   | 是   | 个人 Codex skills  |
+| `Claude`            | `~/.claude/skills`  | 是   | 个人 Claude Code skills |
 
 
 > [!NOTE]
@@ -119,7 +119,7 @@ npm run tauri dev
 
 - 输入来源名称与文件夹路径（可点击 **浏览…** 使用系统文件夹选择对话框）
 - 选择是否为可编辑来源
-- 使用 **导出来源配置** / **导入来源配置** 将自定义来源与默认来源的启用状态存为 JSON（导入会替换现有自定义来源并应用文件中的默认来源开关）
+- 在顶部栏右侧 **设置**（齿轮）中使用 **导出来源配置** / **导入来源配置**，将自定义来源与默认来源的启用状态存为 JSON（导入会替换现有自定义来源并应用文件中的默认来源开关）
 
 来源配置和启用状态会保存在本地 `localStorage` 中，因此重新打开应用后仍会保留。
 
@@ -132,6 +132,8 @@ npm run tauri dev
 - 搜索关键字
 - 按来源筛选
 - 仅显示可编辑来源
+
+同一来源下若多个 `SKILL.md` 的 frontmatter `name` 相同（例如同时存在 `gstack/browse/` 与 `gstack/.agents/skills/gstack-browse/`），列表**默认只保留一条**：优先保留路径中**不含** `/.agents/skills/` 的副本，其次更短路径。
 
 技能列表会显示匹配结果数量，详情区会展示：
 

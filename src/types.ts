@@ -1,4 +1,4 @@
-export type SourceKind = 'cursor' | 'codex' | 'custom'
+export type SourceKind = 'cursor' | 'codex' | 'claude' | 'custom'
 
 export interface SourceConfig {
   id: string

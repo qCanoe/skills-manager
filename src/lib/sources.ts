@@ -179,6 +179,8 @@ export function getSourceBadge(source: SourceConfig) {
       return 'Cursor'
     case 'codex':
       return 'Codex'
+    case 'claude':
+      return 'Claude'
     default:
       return 'Custom'
   }

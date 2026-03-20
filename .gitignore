@@ -1,10 +1,12 @@
 # Dependencies
 node_modules/
+node_modules/.tmp/
 
 # Build outputs
 dist/
 dist-ssr/
 *.tsbuildinfo
+vite.config.ts.timestamp-*
 
 # Logs
 logs/
@@ -43,6 +45,10 @@ src-tauri/gen/
 
 # Cursor
 .cursor/
+
+# Test / tooling caches
+coverage/
+.eslintcache
 
 # Misc
 *.local

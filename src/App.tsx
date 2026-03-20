@@ -100,35 +100,62 @@ function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
 
-  const pushToast = useCallback((title: string, detail?: string) => {
-    setToasts((prev) => [...prev, { id: Date.now(), title, detail }])
-  }, [])
+  const pushToast = useCallback(
+    (title: string, detail?: string, variant: ToastMessage['variant'] = 'success') => {
+      setToasts((prev) => [...prev, { id: Date.now(), title, detail, variant }])
+    },
+    [],
+  )
 
   const dismissToast = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
-  const refreshSkills = useCallback(async (currentSources: SourceConfig[], nextSelectedId?: string) => {
-    setIsLoading(true)
-    setErrorMessage(null)
-    setStatusLine('扫描中...')
+  const refreshSkills = useCallback(
+    async (
+      currentSources: SourceConfig[],
+      nextSelectedId?: string,
+      quiet?: boolean,
+    ): Promise<{ ok: true; count: number } | { ok: false }> => {
+      if (!quiet) {
+        setIsLoading(true)
+        setErrorMessage(null)
+        setStatusLine('扫描中...')
+      }
 
-    try {
-      const rawSkills = await invoke<RawSkillRecord[]>('scan_skills', {
-        sources: currentSources.filter((source) => source.enabled),
-      })
-      const normalized = normalizeSkills(rawSkills, currentSources)
-      setSkills(normalized)
-      setRefreshSeq((n) => n + 1)
-      setSelectedSkillId((previous) => nextSelectedId ?? previous ?? normalized[0]?.id)
-      setStatusLine(`已索引 ${normalized.length} 个 skills`)
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : String(error))
-      setStatusLine('扫描失败。')
-    } finally {
-      setIsLoading(false)
+      try {
+        const rawSkills = await invoke<RawSkillRecord[]>('scan_skills', {
+          sources: currentSources.filter((source) => source.enabled),
+        })
+        const normalized = normalizeSkills(rawSkills, currentSources)
+        setSkills(normalized)
+        setRefreshSeq((n) => n + 1)
+        setSelectedSkillId((previous) => nextSelectedId ?? previous ?? normalized[0]?.id)
+        setStatusLine(`已索引 ${normalized.length} 个 skills`)
+        return { ok: true, count: normalized.length }
+      } catch (error) {
+        if (!quiet) {
+          setErrorMessage(error instanceof Error ? error.message : String(error))
+          setStatusLine('扫描失败。')
+        }
+        return { ok: false }
+      } finally {
+        if (!quiet) {
+          setIsLoading(false)
+        }
+      }
+    },
+    [],
+  )
+
+  const handleToolbarRefresh = useCallback(async () => {
+    const result = await refreshSkills(sources)
+    if (result.ok) {
+      pushToast('扫描完成', `已索引 ${result.count} 个 skills`)
+    } else {
+      pushToast('扫描失败', '请查看上方错误说明', 'error')
     }
-  }, [])
+  }, [pushToast, refreshSkills, sources])
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -192,6 +219,24 @@ function App() {
 
     return () => cleanup?.()
   }, [refreshSkills])
+
+  // Rescan when the window regains visibility (e.g. after adding skills in another app).
+  useEffect(() => {
+    if (!bootstrapped || !isTauriRuntime()) return
+
+    let wasHidden = document.visibilityState === 'hidden'
+
+    const onVisibility = () => {
+      const hidden = document.visibilityState === 'hidden'
+      if (wasHidden && !hidden) {
+        void refreshSkills(sourcesRef.current, undefined, true)
+      }
+      wasHidden = hidden
+    }
+
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [bootstrapped, refreshSkills])
 
   const deferredSearchValue = useDeferredValue(searchValue)
 
@@ -509,8 +554,11 @@ function App() {
         writableOnly={showWritableOnly}
         onSearchChange={setSearchValue}
         onToggleWritable={() => setShowWritableOnly((current) => !current)}
-        onRefresh={() => void refreshSkills(sources)}
+        onRefresh={handleToolbarRefresh}
         onCreate={() => setEditorState({ mode: 'create' })}
+        desktopFeatures={bootstrapped && isTauriRuntime()}
+        onExportSources={bootstrapped && isTauriRuntime() ? handleExportSources : undefined}
+        onImportSourcesText={bootstrapped && isTauriRuntime() ? handleImportSourcesText : undefined}
       />
 
       {/* Error banner */}
@@ -542,8 +590,6 @@ function App() {
           onAddCustomSource={handleAddCustomSource}
           onCopySource={setCopyingSource}
           onRemoveSource={handleRemoveSource}
-          onExportSources={bootstrapped && isTauriRuntime() ? handleExportSources : undefined}
-          onImportSourcesText={bootstrapped && isTauriRuntime() ? handleImportSourcesText : undefined}
         />
 
         {/* Selected skill detail drawer */}

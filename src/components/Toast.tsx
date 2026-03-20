@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, X } from 'lucide-react'
 
 export interface ToastMessage {
   id: number
   title: string
   detail?: string
+  /** 默认 success；error 用于失败类提示。 */
+  variant?: 'success' | 'error'
 }
 
 const DURATION = 3000
@@ -41,10 +43,20 @@ function ToastItem({ message, onDismiss }: ToastProps) {
     setTimeout(() => onDismiss(message.id), 320)
   }
 
+  const isError = message.variant === 'error'
+
   return (
-    <div className={`toast ${visible ? 'toast--visible' : ''}`} role="status" aria-live="polite">
+    <div
+      className={`toast ${visible ? 'toast--visible' : ''} ${isError ? 'toast--error' : ''}`}
+      role="status"
+      aria-live="polite"
+    >
       <div className="toast__inner">
-        <CheckCircle2 className="toast__icon" size={15} />
+        {isError ? (
+          <AlertTriangle className="toast__icon toast__icon--error" size={15} aria-hidden="true" />
+        ) : (
+          <CheckCircle2 className="toast__icon" size={15} aria-hidden="true" />
+        )}
         <div className="toast__body">
           <span className="toast__title">{message.title}</span>
           {message.detail ? <span className="toast__detail">{message.detail}</span> : null}

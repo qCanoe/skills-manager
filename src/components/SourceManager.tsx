@@ -1,5 +1,5 @@
-import { ChevronDown, CopyPlus, Download, FolderOpen, FolderPlus, Layers, Trash2, Upload, X } from 'lucide-react'
-import { useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { ChevronDown, CopyPlus, FolderOpen, FolderPlus, Layers, Trash2, X } from 'lucide-react'
+import { useId, useState, type FormEvent } from 'react'
 
 import { getSourceBadge } from '../lib/sources'
 import type { SourceConfig, SkillRecord } from '../types'
@@ -28,10 +28,7 @@ export function SourceManager({
   onAddCustomSource,
   onCopySource,
   onRemoveSource,
-  onExportSources,
-  onImportSourcesText,
 }: SourceManagerProps) {
-  const importInputRef = useRef<HTMLInputElement>(null)
   const sectionContentId = useId()
   const [collapsed, setCollapsed] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -59,20 +56,6 @@ export function SourceManager({
     } catch {
       /* dialog cancelled or unavailable */
     }
-  }
-
-  const triggerImport = () => importInputRef.current?.click()
-
-  const handleImportFile = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file || !onImportSourcesText) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const text = typeof reader.result === 'string' ? reader.result : ''
-      void onImportSourcesText(text)
-    }
-    reader.readAsText(file)
   }
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -105,7 +88,7 @@ export function SourceManager({
           <Layers size={14} style={{ color: 'var(--text-faint)' }} />
           <span className="tray-section-label">来源</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="tray-section-header__right">
           <span className="tray-section-status">{sources.filter((s) => s.enabled).length} 已启用</span>
           <ChevronDown size={14} className={`tray-section-chevron ${collapsed ? 'is-collapsed' : ''}`} />
         </div>
@@ -146,7 +129,7 @@ export function SourceManager({
           })}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div className="source-rows">
           {sources.map((source) => {
             const sourceSkills = skills.filter((skill) => skill.sourceId === source.id)
             const hasRootLevelSkill = sourceSkills.some((skill) => !skill.relativePath.includes('/'))
@@ -229,7 +212,7 @@ export function SourceManager({
           })}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 0 0' }}>
+        <div className="source-add-trigger">
           <button
             className="ghost-button ghost-button--wide"
             onClick={() => setShowAddForm((v) => !v)}
@@ -238,26 +221,6 @@ export function SourceManager({
             <FolderPlus size={14} />
             {showAddForm ? '取消添加' : '添加自定义来源'}
           </button>
-
-          {desktopFeatures && onExportSources && onImportSourcesText ? (
-            <div className="source-config-io">
-              <input
-                ref={importInputRef}
-                type="file"
-                accept=".json,application/json"
-                style={{ display: 'none' }}
-                onChange={handleImportFile}
-              />
-              <button className="ghost-button ghost-button--wide" onClick={() => void onExportSources()} type="button">
-                <Download size={14} />
-                导出来源配置
-              </button>
-              <button className="ghost-button ghost-button--wide" onClick={triggerImport} type="button">
-                <Upload size={14} />
-                导入来源配置
-              </button>
-            </div>
-          ) : null}
         </div>
 
         {showAddForm ? (

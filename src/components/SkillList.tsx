@@ -29,7 +29,7 @@ export function SkillList({ skills, selectedSkillId, onSelectSkill }: SkillListP
           <Library size={14} style={{ color: 'var(--text-faint)' }} />
           <span className="tray-section-label">Skills</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="tray-section-header__right">
           <span className="tray-section-status">{skills.length} 条</span>
           <ChevronDown size={14} className={`tray-section-chevron ${collapsed ? 'is-collapsed' : ''}`} />
         </div>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { normalizeSkills } from './skills'
-import type { RawSkillRecord, SourceConfig } from '../types'
+import { mergeSkillsByContent, normalizeSkills } from './skills'
+import type { RawSkillRecord, SkillRecord, SourceConfig } from '../types'
 
 const stubSource: SourceConfig = {
   id: 'test',
@@ -93,5 +93,67 @@ description: Canonical copy
     const rawB: RawSkillRecord = { ...rawSkill('x/SKILL.md', excerpt), sourceId: 'b' }
     const out = normalizeSkills([rawA, rawB], [s1, s2])
     expect(out).toHaveLength(2)
+  })
+})
+
+function stubSkill(overrides: Partial<SkillRecord> = {}): SkillRecord {
+  return {
+    id: 'test:x/SKILL.md',
+    sourceId: 'test',
+    sourceLabel: 'Test',
+    sourceKind: 'custom',
+    rootPath: '/tmp',
+    skillDir: '/tmp/x',
+    skillFile: '/tmp/x/SKILL.md',
+    relativePath: 'x/SKILL.md',
+    extras: [],
+    rawExcerpt: '',
+    writable: true,
+    name: 'my-skill',
+    description: 'desc',
+    previewBody: 'body line',
+    namespace: undefined,
+    tags: [],
+    searchIndex: 'my-skill desc body line',
+    ...overrides,
+  }
+}
+
+describe('mergeSkillsByContent', () => {
+  it('returns skills unchanged when there are no duplicates', () => {
+    const a = stubSkill({ id: 'a', name: 'alpha', previewBody: 'alpha body' })
+    const b = stubSkill({ id: 'b', name: 'beta', previewBody: 'beta body' })
+    expect(mergeSkillsByContent([a, b])).toHaveLength(2)
+  })
+
+  it('merges skills with same name and previewBody into one entry', () => {
+    const a = stubSkill({ id: 'src1:x/SKILL.md', sourceId: 'src1', sourceLabel: 'Source 1', relativePath: 'x/SKILL.md' })
+    const b = stubSkill({ id: 'src2:x/SKILL.md', sourceId: 'src2', sourceLabel: 'Source 2', relativePath: 'x/SKILL.md' })
+    const out = mergeSkillsByContent([a, b])
+    expect(out).toHaveLength(1)
+    expect(out[0]?.mergedPaths).toHaveLength(1)
+  })
+
+  it('prefers writable copy as primary', () => {
+    const readonly = stubSkill({ id: 'r:x/SKILL.md', sourceId: 'r', writable: false, relativePath: 'x/SKILL.md' })
+    const writable = stubSkill({ id: 'w:x/SKILL.md', sourceId: 'w', writable: true, relativePath: 'y/SKILL.md' })
+    const [primary] = mergeSkillsByContent([readonly, writable])
+    expect(primary?.writable).toBe(true)
+    expect(primary?.mergedPaths?.[0]?.writable).toBe(false)
+  })
+
+  it('stores alternate path info in mergedPaths', () => {
+    const a = stubSkill({ id: 'a:path-a/SKILL.md', sourceId: 'a', sourceLabel: 'A', relativePath: 'path-a/SKILL.md', skillDir: '/a' })
+    const b = stubSkill({ id: 'b:path-b/SKILL.md', sourceId: 'b', sourceLabel: 'B', relativePath: 'path-b/SKILL.md', skillDir: '/b' })
+    const [merged] = mergeSkillsByContent([a, b])
+    expect(merged?.mergedPaths).toEqual([
+      expect.objectContaining({ sourceId: 'b', sourceLabel: 'B', relativePath: 'path-b/SKILL.md' }),
+    ])
+  })
+
+  it('does not merge skills with same name but different content', () => {
+    const a = stubSkill({ id: 'a', name: 'foo', previewBody: 'content A' })
+    const b = stubSkill({ id: 'b', name: 'foo', previewBody: 'content B' })
+    expect(mergeSkillsByContent([a, b])).toHaveLength(2)
   })
 })

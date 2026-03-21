@@ -121,9 +121,40 @@ export function SkillPreview({
         {expanded && (
           <>
             <div className="skill-drawer__meta">
-              <div className="skill-drawer__meta-item">
+              <div className="skill-drawer__meta-item skill-drawer__meta-item--full">
                 <span className="skill-drawer__meta-label">路径</span>
-                <span className="skill-drawer__meta-value">{skill.relativePath}</span>
+                {skill.mergedPaths && skill.mergedPaths.length > 0 ? (
+                  <div className="skill-drawer__merged-paths">
+                    {[
+                      { sourceId: skill.sourceId, sourceLabel: skill.sourceLabel, relativePath: skill.relativePath, skillDir: skill.skillDir, skillFile: skill.skillFile, writable: skill.writable },
+                      ...skill.mergedPaths,
+                    ].map((p) => (
+                      <div key={`${p.sourceId}:${p.relativePath}`} className="skill-drawer__merged-path">
+                        <span className="skill-drawer__merged-path-text">
+                          {p.sourceLabel} · {p.relativePath}
+                        </span>
+                        <button
+                          className="ghost-button ghost-button--xs"
+                          type="button"
+                          onClick={() => onOpenFolder(p.skillDir)}
+                          title="打开文件夹"
+                        >
+                          <FolderOpen size={11} />
+                        </button>
+                        <button
+                          className="ghost-button ghost-button--xs"
+                          type="button"
+                          onClick={() => onOpenSkill(p.skillFile)}
+                          title="打开 SKILL.md"
+                        >
+                          <SquareArrowOutUpRight size={11} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="skill-drawer__meta-value">{skill.relativePath}</span>
+                )}
               </div>
               <div className="skill-drawer__meta-item">
                 <span className="skill-drawer__meta-label">命名空间</span>

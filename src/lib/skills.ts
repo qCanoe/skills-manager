@@ -1,4 +1,4 @@
-import type { RawSkillRecord, SkillRecord, SourceConfig } from '../types'
+import type { RawSkillRecord, SkillPathEntry, SkillRecord, SourceConfig } from '../types'
 
 function readString(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -167,6 +167,56 @@ function dedupeBySourceAndName(skills: SkillRecord[]): SkillRecord[] {
     kept.push(pickPreferredDuplicate(group))
   }
   return kept
+}
+
+/**
+ * When showing all sources at once, merge skills that share the same name and
+ * preview body (i.e. appear to be identical copies across different paths).
+ * The "primary" copy is chosen by preferring writable > shorter path > alphabetical.
+ * Alternate paths are stored in `mergedPaths` on the primary record.
+ */
+export function mergeSkillsByContent(skills: SkillRecord[]): SkillRecord[] {
+  const groups = new Map<string, SkillRecord[]>()
+
+  for (const skill of skills) {
+    const key = `${skill.name.trim().toLowerCase()}::${skill.previewBody}`
+    const list = groups.get(key)
+    if (list) {
+      list.push(skill)
+    } else {
+      groups.set(key, [skill])
+    }
+  }
+
+  const result: SkillRecord[] = []
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      result.push(group[0]!)
+      continue
+    }
+
+    const sorted = [...group].sort((a, b) => {
+      if (a.writable !== b.writable) return a.writable ? -1 : 1
+      const aRel = comparableRelativePath(a.relativePath)
+      const bRel = comparableRelativePath(b.relativePath)
+      if (aRel.length !== bRel.length) return aRel.length - bRel.length
+      return aRel.localeCompare(bRel)
+    })
+
+    const primary = sorted[0]!
+    const mergedPaths: SkillPathEntry[] = sorted.slice(1).map((s) => ({
+      sourceId: s.sourceId,
+      sourceLabel: s.sourceLabel,
+      relativePath: s.relativePath,
+      skillDir: s.skillDir,
+      skillFile: s.skillFile,
+      writable: s.writable,
+    }))
+
+    result.push({ ...primary, mergedPaths })
+  }
+
+  return result.sort((a, b) => a.name.localeCompare(b.name))
 }
 
 export function normalizeSkills(

@@ -121,29 +121,14 @@ export function SkillPreview({
         {expanded && (
           <>
             <div className="skill-drawer__meta">
-              <div className="skill-drawer__meta-item">
+              <div className="skill-drawer__meta-item skill-drawer__meta-item--full">
                 <span className="skill-drawer__meta-label">路径</span>
-                <span className="skill-drawer__meta-value">{skill.relativePath}</span>
-              </div>
-              <div className="skill-drawer__meta-item">
-                <span className="skill-drawer__meta-label">命名空间</span>
-                <span className="skill-drawer__meta-value">{skill.namespace ?? '顶层'}</span>
-              </div>
-              <div className="skill-drawer__meta-item">
-                <span className="skill-drawer__meta-label">权限</span>
-                <span className="skill-drawer__meta-value">{skill.writable ? '可编辑' : '只读'}</span>
-              </div>
-              <div className="skill-drawer__meta-item">
-                <span className="skill-drawer__meta-label">附件</span>
-                <span className="skill-drawer__meta-value">
-                  {skill.extras.length > 0 ? skill.extras.join(', ') : '无'}
-                </span>
-              </div>
-              {skill.mergedPaths && skill.mergedPaths.length > 0 ? (
-                <div className="skill-drawer__meta-item skill-drawer__meta-item--full">
-                  <span className="skill-drawer__meta-label">重复路径（已合并）</span>
+                {skill.mergedPaths && skill.mergedPaths.length > 0 ? (
                   <div className="skill-drawer__merged-paths">
-                    {skill.mergedPaths.map((p) => (
+                    {[
+                      { sourceId: skill.sourceId, sourceLabel: skill.sourceLabel, relativePath: skill.relativePath, skillDir: skill.skillDir, skillFile: skill.skillFile, writable: skill.writable },
+                      ...skill.mergedPaths,
+                    ].map((p) => (
                       <div key={`${p.sourceId}:${p.relativePath}`} className="skill-drawer__merged-path">
                         <span className="skill-drawer__merged-path-text">
                           {p.sourceLabel} · {p.relativePath}
@@ -167,8 +152,24 @@ export function SkillPreview({
                       </div>
                     ))}
                   </div>
-                </div>
-              ) : null}
+                ) : (
+                  <span className="skill-drawer__meta-value">{skill.relativePath}</span>
+                )}
+              </div>
+              <div className="skill-drawer__meta-item">
+                <span className="skill-drawer__meta-label">命名空间</span>
+                <span className="skill-drawer__meta-value">{skill.namespace ?? '顶层'}</span>
+              </div>
+              <div className="skill-drawer__meta-item">
+                <span className="skill-drawer__meta-label">权限</span>
+                <span className="skill-drawer__meta-value">{skill.writable ? '可编辑' : '只读'}</span>
+              </div>
+              <div className="skill-drawer__meta-item">
+                <span className="skill-drawer__meta-label">附件</span>
+                <span className="skill-drawer__meta-value">
+                  {skill.extras.length > 0 ? skill.extras.join(', ') : '无'}
+                </span>
+              </div>
             </div>
 
             <div

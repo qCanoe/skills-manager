@@ -551,6 +551,13 @@
   text-overflow: ellipsis;
 }
 
+.skill-row__meta-merged {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-muted);
+}
+
 .badge-writable {
   width: 8px;
   height: 8px;
@@ -681,6 +688,36 @@
   font-size: 0.8rem;
   color: var(--text);
   word-break: break-word;
+}
+
+.skill-drawer__meta-item--full {
+  grid-column: 1 / -1;
+}
+
+.skill-drawer__merged-paths {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.skill-drawer__merged-path {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.skill-drawer__merged-path-text {
+  flex: 1;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.ghost-button--xs {
+  padding: 1px 4px;
+  font-size: 0.7rem;
+  gap: 2px;
 }
 
 .skill-drawer__preview {

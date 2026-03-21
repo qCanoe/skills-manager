@@ -1,4 +1,4 @@
-import { ChevronDown, Library } from 'lucide-react'
+import { ChevronDown, Library, GitMerge } from 'lucide-react'
 import { useId, useState } from 'react'
 import clsx from 'clsx'
 
@@ -55,7 +55,14 @@ export function SkillList({ skills, selectedSkillId, onSelectSkill }: SkillListP
                 <div className="skill-row__desc">{skill.description}</div>
               ) : null}
               <div className="skill-row__meta">
-                {skill.sourceLabel} · {skill.relativePath}
+                {skill.mergedPaths && skill.mergedPaths.length > 0 ? (
+                  <span className="skill-row__meta-merged">
+                    <GitMerge size={10} aria-hidden="true" />
+                    {skill.mergedPaths.length + 1} 个路径
+                  </span>
+                ) : (
+                  <>{skill.sourceLabel} · {skill.relativePath}</>
+                )}
               </div>
             </div>
             {skill.writable ? <span className="badge-writable" title="可编辑" aria-hidden="true" /> : null}

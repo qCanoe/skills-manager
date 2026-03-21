@@ -139,6 +139,36 @@ export function SkillPreview({
                   {skill.extras.length > 0 ? skill.extras.join(', ') : '无'}
                 </span>
               </div>
+              {skill.mergedPaths && skill.mergedPaths.length > 0 ? (
+                <div className="skill-drawer__meta-item skill-drawer__meta-item--full">
+                  <span className="skill-drawer__meta-label">重复路径（已合并）</span>
+                  <div className="skill-drawer__merged-paths">
+                    {skill.mergedPaths.map((p) => (
+                      <div key={`${p.sourceId}:${p.relativePath}`} className="skill-drawer__merged-path">
+                        <span className="skill-drawer__merged-path-text">
+                          {p.sourceLabel} · {p.relativePath}
+                        </span>
+                        <button
+                          className="ghost-button ghost-button--xs"
+                          type="button"
+                          onClick={() => onOpenFolder(p.skillDir)}
+                          title="打开文件夹"
+                        >
+                          <FolderOpen size={11} />
+                        </button>
+                        <button
+                          className="ghost-button ghost-button--xs"
+                          type="button"
+                          onClick={() => onOpenSkill(p.skillFile)}
+                          title="打开 SKILL.md"
+                        >
+                          <SquareArrowOutUpRight size={11} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div

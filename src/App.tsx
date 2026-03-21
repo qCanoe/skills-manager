@@ -14,7 +14,7 @@ import { SkillList } from './components/SkillList'
 import { SkillPreview } from './components/SkillPreview'
 import { SourceManager } from './components/SourceManager'
 import { ToastContainer, type ToastMessage } from './components/Toast'
-import { normalizeSkills } from './lib/skills'
+import { mergeSkillsByContent, normalizeSkills } from './lib/skills'
 import {
   buildSourcesExport,
   createCustomSource,
@@ -243,13 +243,17 @@ function App() {
   const visibleSkills = useMemo(() => {
     const term = deferredSearchValue.trim().toLowerCase()
 
-    return skills.filter((skill) => {
+    const filtered = skills.filter((skill) => {
       if (showWritableOnly && !skill.writable) return false
       if (activeSourceId !== 'all' && skill.sourceId !== activeSourceId) return false
       if (!term) return true
 
       return skill.searchIndex.includes(term)
     })
+
+    // When showing all sources, merge identical skills (same name + content)
+    // that appear across multiple paths into a single entry.
+    return activeSourceId === 'all' ? mergeSkillsByContent(filtered) : filtered
   }, [activeSourceId, deferredSearchValue, showWritableOnly, skills])
 
   // Derive the effective selection synchronously during render to avoid a

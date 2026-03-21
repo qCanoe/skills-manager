@@ -20,6 +20,16 @@ export interface RawSkillRecord {
   modifiedAtEpoch?: number | null
 }
 
+/** One occurrence of a skill that was merged into a primary record. */
+export interface SkillPathEntry {
+  sourceId: string
+  sourceLabel: string
+  relativePath: string
+  skillDir: string
+  skillFile: string
+  writable: boolean
+}
+
 export interface SkillRecord extends RawSkillRecord {
   id: string
   sourceLabel: string
@@ -31,6 +41,8 @@ export interface SkillRecord extends RawSkillRecord {
   previewBody: string
   tags: string[]
   searchIndex: string
+  /** Populated only in the "all sources" view when identical skills are merged. */
+  mergedPaths?: SkillPathEntry[]
 }
 
 export interface SaveSkillRequest {

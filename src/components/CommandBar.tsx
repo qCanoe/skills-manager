@@ -128,7 +128,7 @@ export function CommandBar({
     <>
       <header className="tray-titlebar">
         <div className="tray-titlebar__left">
-          <span className="tray-titlebar__title">skills</span>
+          <span className="tray-titlebar__title">Skills</span>
           <span className="tray-titlebar__subtitle">
             {resultCount} / {totalCount}
           </span>

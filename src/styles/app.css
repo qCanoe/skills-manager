@@ -22,6 +22,7 @@
   gap: var(--space-sm);
   flex-shrink: 0;
   user-select: none;
+  overflow: visible;
 }
 
 .tray-titlebar__left {
@@ -29,6 +30,7 @@
   align-items: center;
   gap: var(--space-xs);
   min-width: 0;
+  overflow: visible;
 }
 
 .tray-titlebar__title {
@@ -36,8 +38,9 @@
   font-size: 1.0625rem;
   font-weight: 700;
   letter-spacing: 0.14em;
-  text-transform: lowercase;
-  line-height: 1.1;
+  line-height: 1.35;
+  /* Room for bold ascenders/descenders — tight line-height was clipping tops */
+  padding-block: 0.12em;
   color: var(--text);
   white-space: nowrap;
   font-synthesis: none;

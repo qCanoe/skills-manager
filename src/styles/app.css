@@ -2153,12 +2153,6 @@
   text-align: center;
 }
 
-/* Prefer fewer awkward mid-phrase breaks in CJK (e.g. avoid splitting fixed terms). */
-.empty-state--folder p {
-  word-break: keep-all;
-  overflow-wrap: break-word;
-}
-
 .empty-state--folder .eyebrow {
   margin-bottom: 0;
   font-size: 0.75rem;
@@ -2182,6 +2176,8 @@
   font-weight: 400;
   line-height: 1.65;
   color: var(--text-muted);
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 /* ── Spin ─────────────────────────────────────────────────────── */

@@ -1,4 +1,11 @@
-export type SourceKind = 'cursor' | 'codex' | 'claude' | 'custom'
+export type SourceKind =
+  | 'cursor'
+  | 'codex'
+  | 'claude'
+  | 'agents'
+  | 'windsurf'
+  | 'amp'
+  | 'custom'
 
 export interface SourceConfig {
   id: string

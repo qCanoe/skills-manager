@@ -43,12 +43,26 @@ src-tauri/target/
 src-tauri/WixTools/
 src-tauri/gen/
 
-# Cursor
-.cursor/
+# Cursor — local hooks/state only; keep `.cursor/rules` committable if you add it
+.cursor/**
+!.cursor/rules/
+!.cursor/rules/**
+
+# Agent local memory (e.g. continual-learning); keep machine-specific
+AGENTS.md
+agents.md
 
 # Test / tooling caches
 coverage/
 .eslintcache
+.cache/
+.turbo/
+.parcel-cache/
+
+# Editor / merge
+*.swp
+*.swo
+*.orig
 
 # Misc
 *.local

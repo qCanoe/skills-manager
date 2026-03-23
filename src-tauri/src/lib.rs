@@ -129,6 +129,46 @@ fn get_default_sources() -> Result<Vec<SourceConfig>, String> {
       kind: "claude".into(),
       enabled: true,
     },
+    SourceConfig {
+      id: "cursor-rules".into(),
+      label: "Cursor Rules".into(),
+      root_path: home_join(&[".cursor", "rules"])?,
+      writable: true,
+      kind: "cursor".into(),
+      enabled: true,
+    },
+    SourceConfig {
+      id: "agents-skills".into(),
+      label: "Agents".into(),
+      root_path: home_join(&[".agents", "skills"])?,
+      writable: true,
+      kind: "agents".into(),
+      enabled: true,
+    },
+    SourceConfig {
+      id: "windsurf-codeium".into(),
+      label: "Windsurf (Codeium)".into(),
+      root_path: home_join(&[".codeium", "windsurf", "memories"])?,
+      writable: true,
+      kind: "windsurf".into(),
+      enabled: true,
+    },
+    SourceConfig {
+      id: "windsurf-rules".into(),
+      label: "Windsurf (rules)".into(),
+      root_path: home_join(&[".windsurf", "rules"])?,
+      writable: true,
+      kind: "windsurf".into(),
+      enabled: true,
+    },
+    SourceConfig {
+      id: "amp-config".into(),
+      label: "Amp".into(),
+      root_path: home_join(&[".config", "amp"])?,
+      writable: true,
+      kind: "amp".into(),
+      enabled: true,
+    },
   ])
 }
 
@@ -974,5 +1014,40 @@ mod tests {
     assert!(error.contains("来源根目录"));
 
     let _ = fs::remove_dir_all(workspace);
+  }
+}
+
+#[cfg(test)]
+mod default_sources_tests {
+  use super::get_default_sources;
+
+  #[test]
+  fn default_sources_has_expected_ids_and_order() {
+    let sources = get_default_sources().expect("home");
+    let ids: Vec<_> = sources.iter().map(|s| s.id.as_str()).collect();
+    assert_eq!(
+      ids,
+      vec![
+        "cursor-personal",
+        "codex-personal",
+        "claude-personal",
+        "cursor-rules",
+        "agents-skills",
+        "windsurf-codeium",
+        "windsurf-rules",
+        "amp-config",
+      ]
+    );
+  }
+
+  #[test]
+  fn default_sources_kinds_match_new_tools() {
+    let sources = get_default_sources().expect("home");
+    let agents = sources.iter().find(|s| s.id == "agents-skills").unwrap();
+    assert_eq!(agents.kind, "agents");
+    let ws = sources.iter().find(|s| s.id == "windsurf-codeium").unwrap();
+    assert_eq!(ws.kind, "windsurf");
+    let amp = sources.iter().find(|s| s.id == "amp-config").unwrap();
+    assert_eq!(amp.kind, "amp");
   }
 }

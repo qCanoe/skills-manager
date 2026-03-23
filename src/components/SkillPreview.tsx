@@ -4,7 +4,7 @@ import { ChevronDown, CopyPlus, FolderOpen, FolderPlus, SquareArrowOutUpRight } 
 import { filterPathEntriesBySourceSkillCount, pathEntriesForSkill } from '../lib/skills'
 import { renderMarkdownToSafeHtml } from '../lib/render-markdown'
 import type { SkillCollection } from '../lib/collections'
-import type { BrowseMode, SkillRecord } from '../types'
+import type { BrowseMode, SkillPathEntry, SkillRecord } from '../types'
 
 interface SkillPreviewProps {
   skill?: SkillRecord
@@ -231,7 +231,7 @@ export function SkillPreview({
                 <span className="skill-drawer__meta-label">路径</span>
                 {visiblePathEntries.length > 1 ? (
                   <div className="skill-drawer__merged-paths">
-                    {visiblePathEntries.map((p) => (
+                    {visiblePathEntries.map((p: SkillPathEntry) => (
                       <div key={`${p.sourceId}:${p.relativePath}`} className="skill-drawer__merged-path">
                         <span className="skill-drawer__merged-path-text">
                           {p.sourceLabel} · {p.relativePath}

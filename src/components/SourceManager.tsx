@@ -1,6 +1,9 @@
-import { ChevronDown, CopyPlus, FolderOpen, FolderPlus, Layers, Trash2, X } from 'lucide-react'
+import { ChevronDown, CopyPlus, Folder, FolderOpen, FolderPlus, Layers, Trash2, X } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
 
+import { CollectionNameDialog } from './CollectionNameDialog'
+import { ConfirmDialog } from './ConfirmDialog'
+import { FolderSelect } from './FolderSelect'
 import { getSourceBadge } from '../lib/sources'
 import type { BrowseMode, SourceConfig, SkillRecord } from '../types'
 import type { SkillCollection } from '../lib/collections'
@@ -48,13 +51,21 @@ export function SourceManager({
   onCopySource,
   onRemoveSource,
 }: SourceManagerProps) {
+  type NameModalState =
+    | { mode: 'create' }
+    | { mode: 'rename'; collectionId: string; initialName: string }
+
   const sectionContentId = useId()
+  const browsePanelId = useId()
   const [collapsed, setCollapsed] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
   const [label, setLabel] = useState('')
   const [path, setPath] = useState('')
   const [writable, setWritable] = useState(true)
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
+  const [nameModal, setNameModal] = useState<NameModalState | null>(null)
+  const [deleteModal, setDeleteModal] = useState<{ id: string; name: string } | null>(null)
+  const [collectionNameDialogKey, setCollectionNameDialogKey] = useState(0)
 
   const pickFolder = async () => {
     if (!desktopFeatures) return
@@ -93,6 +104,7 @@ export function SourceManager({
   const allCount = skills.length
 
   return (
+    <>
     <div className="tray-section">
       <div
         className="tray-section-header"
@@ -120,28 +132,49 @@ export function SourceManager({
         aria-label="来源列表与管理"
         hidden={collapsed}
       >
-        <div className="browse-mode-segment" role="tablist" aria-label="浏览方式">
+        <div
+          className="browse-mode-segment"
+          role="tablist"
+          aria-label="浏览方式"
+          data-active={browseMode === 'sources' ? 'sources' : 'folders'}
+        >
+          <span className="browse-mode-segment__thumb" aria-hidden="true" />
           <button
             type="button"
             role="tab"
+            id={`${sectionContentId}-tab-sources`}
+            aria-controls={browsePanelId}
             aria-selected={browseMode === 'sources'}
             className={`browse-mode-segment__btn ${browseMode === 'sources' ? 'is-active' : ''}`}
             onClick={() => onBrowseModeChange('sources')}
           >
+            <Layers size={13} strokeWidth={2} className="browse-mode-segment__icon" aria-hidden />
             来源
           </button>
           <button
             type="button"
             role="tab"
+            id={`${sectionContentId}-tab-folders`}
+            aria-controls={browsePanelId}
             aria-selected={browseMode === 'collections'}
             className={`browse-mode-segment__btn ${browseMode === 'collections' ? 'is-active' : ''}`}
             onClick={() => onBrowseModeChange('collections')}
           >
-            Collections
+            <Folder size={13} strokeWidth={2} className="browse-mode-segment__icon" aria-hidden />
+            文件夹
           </button>
         </div>
 
+        <div
+          id={browsePanelId}
+          role="tabpanel"
+          aria-labelledby={
+            browseMode === 'sources' ? `${sectionContentId}-tab-sources` : `${sectionContentId}-tab-folders`
+          }
+          className="browse-panel"
+        >
         {browseMode === 'sources' ? (
+        <div key="sources" className="browse-panel__surface">
         <div className="source-chips">
           <button
             className={`source-chip ${activeSourceId === 'all' ? 'is-active' : ''}`}
@@ -152,9 +185,13 @@ export function SourceManager({
             <span className="source-chip__count">{allCount}</span>
           </button>
 
-          {sources.map((source) => {
-            const count = skills.filter((skill) => skill.sourceId === source.id).length
-            return (
+          {sources
+            .map((source) => ({
+              source,
+              count: skills.filter((skill) => skill.sourceId === source.id).length,
+            }))
+            .filter(({ count }) => count > 0)
+            .map(({ source, count }) => (
               <button
                 key={source.id}
                 className={`source-chip ${activeSourceId === source.id ? 'is-active' : ''} ${!source.enabled ? 'is-disabled' : ''}`}
@@ -166,40 +203,36 @@ export function SourceManager({
                 {source.label}
                 <span className="source-chip__count">{count}</span>
               </button>
-            )
-          })}
+            ))}
+        </div>
         </div>
         ) : (
+          <div key="folders" className="browse-panel__surface">
           <div className="collection-toolbar">
             <label className="collection-toolbar__label" htmlFor="collection-select">
-              当前 collection
+              当前文件夹
             </label>
-            <div className="collection-toolbar__row">
-              <select
+            <div className="collection-toolbar__primary">
+              <FolderSelect
                 id="collection-select"
-                className="collection-toolbar__select"
+                collections={collections}
+                collectionMemberCounts={collectionMemberCounts}
                 value={activeCollectionId}
-                onChange={(e) => onSelectCollection(e.target.value)}
-              >
-                <option value="">选择 collection…</option>
-                {collections.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}（{collectionMemberCounts[c.id] ?? 0}）
-                  </option>
-                ))}
-              </select>
+                onChange={onSelectCollection}
+                placeholder="选择文件夹…"
+              />
               <button
                 type="button"
-                className="ghost-button"
+                className="ghost-button collection-toolbar__new-btn"
                 onClick={() => {
-                  const name = window.prompt('新建 collection 名称', '')
-                  if (name != null && name.trim()) onCreateCollection(name.trim())
+                  setCollectionNameDialogKey((k) => k + 1)
+                  setNameModal({ mode: 'create' })
                 }}
               >
                 新建
               </button>
             </div>
-            <div className="collection-toolbar__row collection-toolbar__row--tight">
+            <div className="collection-toolbar__secondary" role="group" aria-label="所选文件夹操作">
               <button
                 type="button"
                 className="ghost-button"
@@ -207,8 +240,13 @@ export function SourceManager({
                 onClick={() => {
                   if (!activeCollectionId) return
                   const c = collections.find((x) => x.id === activeCollectionId)
-                  const name = window.prompt('重命名', c?.name ?? '')
-                  if (name != null && name.trim()) onRenameCollection(activeCollectionId, name.trim())
+                  if (!c) return
+                  setCollectionNameDialogKey((k) => k + 1)
+                  setNameModal({
+                    mode: 'rename',
+                    collectionId: activeCollectionId,
+                    initialName: c.name,
+                  })
                 }}
               >
                 重命名
@@ -219,20 +257,24 @@ export function SourceManager({
                 disabled={!activeCollectionId}
                 onClick={() => {
                   if (!activeCollectionId) return
-                  if (window.confirm('删除该 collection？成员引用将一并删除。')) {
-                    onDeleteCollection(activeCollectionId)
-                  }
+                  const c = collections.find((x) => x.id === activeCollectionId)
+                  if (!c) return
+                  setDeleteModal({ id: activeCollectionId, name: c.name })
                 }}
               >
                 删除
               </button>
             </div>
           </div>
+          </div>
         )}
+        </div>
 
         {browseMode === 'sources' ? (
         <div className="source-rows">
-          {sources.map((source) => {
+          {sources
+            .filter((source) => skills.some((skill) => skill.sourceId === source.id))
+            .map((source) => {
             const sourceSkills = skills.filter((skill) => skill.sourceId === source.id)
             const hasRootLevelSkill = sourceSkills.some((skill) => !skill.relativePath.includes('/'))
             const isCopyDisabled = sourceSkills.length === 0 || hasRootLevelSkill
@@ -379,6 +421,38 @@ export function SourceManager({
         ) : null}
       </div>
     </div>
+
+    {nameModal ? (
+      <CollectionNameDialog
+        key={collectionNameDialogKey}
+        mode={nameModal.mode}
+        initialName={nameModal.mode === 'rename' ? nameModal.initialName : ''}
+        onCancel={() => setNameModal(null)}
+        onConfirm={(name) => {
+          if (nameModal.mode === 'create') {
+            onCreateCollection(name)
+          } else {
+            onRenameCollection(nameModal.collectionId, name)
+          }
+          setNameModal(null)
+        }}
+      />
+    ) : null}
+
+    {deleteModal ? (
+      <ConfirmDialog
+        title="删除文件夹"
+        description={`确定删除「${deleteModal.name}」？其中的 skill 引用将一并移除。`}
+        confirmLabel="删除"
+        danger
+        onCancel={() => setDeleteModal(null)}
+        onConfirm={() => {
+          onDeleteCollection(deleteModal.id)
+          setDeleteModal(null)
+        }}
+      />
+    ) : null}
+    </>
   )
 }
 

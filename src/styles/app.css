@@ -31,24 +31,16 @@
   min-width: 0;
 }
 
-.tray-titlebar__icon {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  background: var(--text);
-  color: var(--bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
 .tray-titlebar__title {
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-family: var(--font-wordmark);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
+  line-height: 1.1;
   color: var(--text);
   white-space: nowrap;
-  letter-spacing: 0.02em;
+  font-synthesis: none;
 }
 
 .tray-titlebar__subtitle {

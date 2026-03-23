@@ -1,4 +1,4 @@
-import { BookOpen, Download, Filter, Plus, RefreshCw, Search, Settings, Upload, X } from 'lucide-react'
+import { Download, Filter, Plus, RefreshCw, Search, Settings, Upload, X } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 
 interface CommandBarProps {
@@ -128,10 +128,7 @@ export function CommandBar({
     <>
       <header className="tray-titlebar">
         <div className="tray-titlebar__left">
-          <div className="tray-titlebar__icon">
-            <BookOpen size={12} strokeWidth={2.5} />
-          </div>
-          <span className="tray-titlebar__title">Skills</span>
+          <span className="tray-titlebar__title">skills</span>
           <span className="tray-titlebar__subtitle">
             {resultCount} / {totalCount}
           </span>

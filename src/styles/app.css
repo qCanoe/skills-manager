@@ -396,6 +396,75 @@
   gap: var(--space-3xs);
 }
 
+/* ── Browse mode (来源 / Collections) ───────────────────────── */
+.browse-mode-segment {
+  display: flex;
+  gap: 0;
+  margin-bottom: var(--space-sm);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  width: fit-content;
+}
+
+.browse-mode-segment__btn {
+  padding: 5px 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: none;
+  background: var(--bg-soft);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.browse-mode-segment__btn:hover {
+  background: var(--bg-strong);
+  color: var(--text);
+}
+
+.browse-mode-segment__btn.is-active {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.collection-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: 0 0 var(--space-sm);
+}
+
+.collection-toolbar__label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.collection-toolbar__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2xs);
+}
+
+.collection-toolbar__row--tight {
+  gap: var(--space-3xs);
+}
+
+.collection-toolbar__select {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  font-size: 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg);
+  color: var(--text);
+}
+
 /* ── Source Filter Chips ──────────────────────────────────────── */
 .source-chips {
   display: flex;
@@ -661,6 +730,40 @@
   padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--border);
   background: var(--bg-elevated);
+}
+
+.skill-drawer__collections {
+  width: 100%;
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: var(--space-2xs);
+  border-top: 1px dashed var(--border-subtle);
+  margin-top: 2px;
+}
+
+.skill-drawer__collections-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.skill-drawer__collections-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.skill-drawer__collection-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  cursor: pointer;
 }
 
 .skill-drawer__meta {

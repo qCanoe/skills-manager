@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { ChevronDown, CopyPlus, FilePenLine, FolderOpen, SquareArrowOutUpRight } from 'lucide-react'
 
 import { renderMarkdownToSafeHtml } from '../lib/render-markdown'
-import type { SkillRecord } from '../types'
+import type { SkillCollection } from '../lib/collections'
+import type { BrowseMode, SkillRecord } from '../types'
 
 interface SkillPreviewProps {
   skill?: SkillRecord
@@ -11,6 +12,12 @@ interface SkillPreviewProps {
   onOpenFolder: (path: string) => void
   onEdit: (skill: SkillRecord) => void
   onCopy: (skill: SkillRecord) => void
+  browseMode?: BrowseMode
+  activeCollectionId?: string
+  allCollections?: SkillCollection[]
+  collectionIdsWithSkill?: string[]
+  onToggleSkillInCollection?: (collectionId: string, add: boolean) => void
+  onRemoveFromActiveCollection?: () => void
 }
 
 export function SkillPreview({
@@ -20,6 +27,12 @@ export function SkillPreview({
   onOpenFolder,
   onEdit,
   onCopy,
+  browseMode = 'sources',
+  activeCollectionId = '',
+  allCollections = [],
+  collectionIdsWithSkill = [],
+  onToggleSkillInCollection,
+  onRemoveFromActiveCollection,
 }: SkillPreviewProps) {
   const [renderedHtml, setRenderedHtml] = useState('')
   const [htmlReady, setHtmlReady] = useState(false)
@@ -116,6 +129,33 @@ export function SkillPreview({
             <CopyPlus size={12} />
             复制
           </button>
+
+          {allCollections.length > 0 && onToggleSkillInCollection ? (
+            <div className="skill-drawer__collections" aria-label="Collections">
+              <span className="skill-drawer__collections-label">加入 collection</span>
+              <div className="skill-drawer__collections-list">
+                {allCollections.map((c) => (
+                  <label key={c.id} className="skill-drawer__collection-check">
+                    <input
+                      type="checkbox"
+                      checked={collectionIdsWithSkill.includes(c.id)}
+                      onChange={(e) => onToggleSkillInCollection(c.id, e.target.checked)}
+                    />
+                    <span>{c.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {browseMode === 'collections' &&
+          activeCollectionId &&
+          collectionIdsWithSkill.includes(activeCollectionId) &&
+          onRemoveFromActiveCollection ? (
+            <button className="ghost-button" type="button" onClick={() => onRemoveFromActiveCollection()}>
+              从当前集合移除
+            </button>
+          ) : null}
         </div>
 
         {expanded && (

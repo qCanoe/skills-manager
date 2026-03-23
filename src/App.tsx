@@ -14,6 +14,20 @@ import { SkillList } from './components/SkillList'
 import { SkillPreview } from './components/SkillPreview'
 import { SourceManager } from './components/SourceManager'
 import { ToastContainer, type ToastMessage } from './components/Toast'
+import {
+  addMember,
+  collectionIdsContainingSkill,
+  createCollection,
+  deleteCollection,
+  filterSkillsForCollection,
+  listMembers,
+  loadCollectionsState,
+  removeMember,
+  removeSkillFromCollection,
+  renameCollection,
+  saveCollectionsState,
+  type CollectionsState,
+} from './lib/collections'
 import { mergeSkillsByContent, normalizeSkills } from './lib/skills'
 import {
   buildSourcesExport,
@@ -26,7 +40,16 @@ import {
   persistSources,
   stringifySourcesExport,
 } from './lib/sources'
-import { loadActiveSource, loadWritableOnly, persistActiveSource, persistWritableOnly } from './lib/ui-state'
+import {
+  loadActiveCollectionId,
+  loadActiveSource,
+  loadBrowseMode,
+  loadWritableOnly,
+  persistActiveCollectionId,
+  persistActiveSource,
+  persistBrowseMode,
+  persistWritableOnly,
+} from './lib/ui-state'
 import type {
   CopyConflictStrategy,
   CopySkillRequest,
@@ -87,6 +110,9 @@ function App() {
   const [refreshSeq, setRefreshSeq] = useState(0)
   const [loadedContent, setLoadedContent] = useState('')
   const [activeSourceId, setActiveSourceId] = useState(loadActiveSource())
+  const [browseMode, setBrowseMode] = useState(loadBrowseMode)
+  const [activeCollectionId, setActiveCollectionId] = useState(loadActiveCollectionId)
+  const [collectionsState, setCollectionsState] = useState<CollectionsState>(() => loadCollectionsState())
   const [showWritableOnly, setShowWritableOnly] = useState(loadWritableOnly())
   const [searchValue, setSearchValue] = useState('')
   const [selectedSkillId, setSelectedSkillId] = useState<string>()
@@ -203,6 +229,24 @@ function App() {
   }, [showWritableOnly])
 
   useEffect(() => {
+    persistBrowseMode(browseMode)
+  }, [browseMode])
+
+  useEffect(() => {
+    persistActiveCollectionId(activeCollectionId)
+  }, [activeCollectionId])
+
+  useEffect(() => {
+    saveCollectionsState(collectionsState)
+  }, [collectionsState])
+
+  useEffect(() => {
+    if (browseMode !== 'collections') return
+    if (activeCollectionId && collectionsState.collections.some((c) => c.id === activeCollectionId)) return
+    setActiveCollectionId(collectionsState.collections[0]?.id ?? '')
+  }, [browseMode, activeCollectionId, collectionsState.collections])
+
+  useEffect(() => {
     if (!isTauriRuntime()) return
 
     const setupListener = async () => {
@@ -240,8 +284,30 @@ function App() {
 
   const deferredSearchValue = useDeferredValue(searchValue)
 
+  const collectionMemberCounts = useMemo(() => {
+    const m: Record<string, number> = {}
+    for (const c of collectionsState.collections) {
+      m[c.id] = listMembers(collectionsState, c.id).length
+    }
+    return m
+  }, [collectionsState])
+
   const visibleSkills = useMemo(() => {
     const term = deferredSearchValue.trim().toLowerCase()
+
+    if (browseMode === 'collections') {
+      if (!activeCollectionId || !collectionsState.collections.some((c) => c.id === activeCollectionId)) {
+        return []
+      }
+      const members = listMembers(collectionsState, activeCollectionId)
+      const inCollection = filterSkillsForCollection(skills, members)
+      const filtered = inCollection.filter((skill) => {
+        if (showWritableOnly && !skill.writable) return false
+        if (!term) return true
+        return skill.searchIndex.includes(term)
+      })
+      return mergeSkillsByContent(filtered)
+    }
 
     const filtered = skills.filter((skill) => {
       if (showWritableOnly && !skill.writable) return false
@@ -254,7 +320,15 @@ function App() {
     // When showing all sources, merge identical skills (same name + content)
     // that appear across multiple paths into a single entry.
     return activeSourceId === 'all' ? mergeSkillsByContent(filtered) : filtered
-  }, [activeSourceId, deferredSearchValue, showWritableOnly, skills])
+  }, [
+    activeCollectionId,
+    activeSourceId,
+    browseMode,
+    collectionsState,
+    deferredSearchValue,
+    showWritableOnly,
+    skills,
+  ])
 
   // Derive the effective selection synchronously during render to avoid a
   // one-frame gap where selectedSkillId still points to a skill from the
@@ -300,6 +374,12 @@ function App() {
   }, [effectiveSelectedSkillId, visibleSkills])
 
   const selectedSkill = visibleSkills.find((skill) => skill.id === effectiveSelectedSkillId)
+
+  const collectionIdsWithSkill = useMemo(() => {
+    if (!selectedSkill) return []
+    return collectionIdsContainingSkill(collectionsState, selectedSkill)
+  }, [collectionsState, selectedSkill])
+
   const selectedSkillFile = selectedSkill?.skillFile
 
   useEffect(() => {
@@ -548,6 +628,40 @@ function App() {
     })
   }
 
+  const handleBrowseModeChange = (mode: typeof browseMode) => {
+    setBrowseMode(mode)
+  }
+
+  const handleCreateCollection = (name: string) => {
+    const { state: next, id } = createCollection(collectionsState, name)
+    setCollectionsState(next)
+    setActiveCollectionId(id)
+    setStatusLine('已新建 collection')
+  }
+
+  const handleRenameCollection = (id: string, name: string) => {
+    setCollectionsState((prev) => renameCollection(prev, id, name))
+    setStatusLine('已重命名 collection')
+  }
+
+  const handleDeleteCollection = (id: string) => {
+    setCollectionsState((prev) => deleteCollection(prev, id))
+    setActiveCollectionId((cur) => (cur === id ? '' : cur))
+    setStatusLine('已删除 collection')
+  }
+
+  const handleToggleSkillInCollection = (collectionId: string, add: boolean) => {
+    if (!selectedSkill) return
+    const ref = { sourceId: selectedSkill.sourceId, relativePath: selectedSkill.relativePath }
+    setCollectionsState((prev) => (add ? addMember(prev, collectionId, ref) : removeMember(prev, collectionId, ref)))
+  }
+
+  const handleRemoveFromActiveCollection = () => {
+    if (!selectedSkill || !activeCollectionId) return
+    setCollectionsState((prev) => removeSkillFromCollection(prev, selectedSkill, activeCollectionId))
+    setStatusLine('已从当前 collection 移除')
+  }
+
   return (
     <main className="app-shell">
       {/* Top: title + search */}
@@ -589,6 +703,15 @@ function App() {
           sources={sources}
           skills={skills}
           desktopFeatures={bootstrapped && isTauriRuntime()}
+          browseMode={browseMode}
+          onBrowseModeChange={handleBrowseModeChange}
+          collections={collectionsState.collections}
+          collectionMemberCounts={collectionMemberCounts}
+          activeCollectionId={activeCollectionId}
+          onSelectCollection={setActiveCollectionId}
+          onCreateCollection={handleCreateCollection}
+          onRenameCollection={handleRenameCollection}
+          onDeleteCollection={handleDeleteCollection}
           onSelectSource={setActiveSourceId}
           onToggleSource={handleToggleSource}
           onAddCustomSource={handleAddCustomSource}
@@ -605,6 +728,12 @@ function App() {
             onOpenSkill={(path) => void handleOpenPath(path)}
             onEdit={(skill) => setEditorState({ mode: 'edit', skill })}
             onCopy={setCopyingSkill}
+            browseMode={browseMode}
+            activeCollectionId={activeCollectionId}
+            allCollections={collectionsState.collections}
+            collectionIdsWithSkill={collectionIdsWithSkill}
+            onToggleSkillInCollection={handleToggleSkillInCollection}
+            onRemoveFromActiveCollection={handleRemoveFromActiveCollection}
           />
         ) : null}
 
@@ -618,8 +747,20 @@ function App() {
         ) : (
           <div className="tray-section">
             <EmptyState
-              title="没有匹配的 skills"
-              description="尝试开启更多来源、清空搜索词或新建 skill。"
+              title={
+                browseMode === 'collections' && !activeCollectionId
+                  ? '请选择 collection'
+                  : browseMode === 'collections' && activeCollectionId
+                    ? '该 collection 暂无 skill'
+                    : '没有匹配的 skills'
+              }
+              description={
+                browseMode === 'collections' && !activeCollectionId
+                  ? '在上方新建或选择一个 collection，然后在来源模式下将 skill 勾选加入。'
+                  : browseMode === 'collections' && activeCollectionId
+                    ? '在预览中把 skill 加入本 collection，或切换回来源模式浏览全部。'
+                    : '尝试开启更多来源、清空搜索词或新建 skill。'
+              }
               actionLabel="新建 skill"
               onAction={() => setEditorState({ mode: 'create' })}
             />

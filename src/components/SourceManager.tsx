@@ -2,13 +2,23 @@ import { ChevronDown, CopyPlus, FolderOpen, FolderPlus, Layers, Trash2, X } from
 import { useId, useState, type FormEvent } from 'react'
 
 import { getSourceBadge } from '../lib/sources'
-import type { SourceConfig, SkillRecord } from '../types'
+import type { BrowseMode, SourceConfig, SkillRecord } from '../types'
+import type { SkillCollection } from '../lib/collections'
 
 interface SourceManagerProps {
   sources: SourceConfig[]
   activeSourceId: string
   skills: SkillRecord[]
   desktopFeatures: boolean
+  browseMode: BrowseMode
+  onBrowseModeChange: (mode: BrowseMode) => void
+  collections: SkillCollection[]
+  collectionMemberCounts: Record<string, number>
+  activeCollectionId: string
+  onSelectCollection: (id: string) => void
+  onCreateCollection: (name: string) => void
+  onRenameCollection: (id: string, name: string) => void
+  onDeleteCollection: (id: string) => void
   onSelectSource: (sourceId: string) => void
   onToggleSource: (sourceId: string) => void
   onAddCustomSource: (label: string, path: string, writable: boolean) => boolean
@@ -23,6 +33,15 @@ export function SourceManager({
   activeSourceId,
   skills,
   desktopFeatures,
+  browseMode,
+  onBrowseModeChange,
+  collections,
+  collectionMemberCounts,
+  activeCollectionId,
+  onSelectCollection,
+  onCreateCollection,
+  onRenameCollection,
+  onDeleteCollection,
   onSelectSource,
   onToggleSource,
   onAddCustomSource,
@@ -101,6 +120,28 @@ export function SourceManager({
         aria-label="来源列表与管理"
         hidden={collapsed}
       >
+        <div className="browse-mode-segment" role="tablist" aria-label="浏览方式">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={browseMode === 'sources'}
+            className={`browse-mode-segment__btn ${browseMode === 'sources' ? 'is-active' : ''}`}
+            onClick={() => onBrowseModeChange('sources')}
+          >
+            来源
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={browseMode === 'collections'}
+            className={`browse-mode-segment__btn ${browseMode === 'collections' ? 'is-active' : ''}`}
+            onClick={() => onBrowseModeChange('collections')}
+          >
+            Collections
+          </button>
+        </div>
+
+        {browseMode === 'sources' ? (
         <div className="source-chips">
           <button
             className={`source-chip ${activeSourceId === 'all' ? 'is-active' : ''}`}
@@ -128,7 +169,68 @@ export function SourceManager({
             )
           })}
         </div>
+        ) : (
+          <div className="collection-toolbar">
+            <label className="collection-toolbar__label" htmlFor="collection-select">
+              当前 collection
+            </label>
+            <div className="collection-toolbar__row">
+              <select
+                id="collection-select"
+                className="collection-toolbar__select"
+                value={activeCollectionId}
+                onChange={(e) => onSelectCollection(e.target.value)}
+              >
+                <option value="">选择 collection…</option>
+                {collections.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}（{collectionMemberCounts[c.id] ?? 0}）
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => {
+                  const name = window.prompt('新建 collection 名称', '')
+                  if (name != null && name.trim()) onCreateCollection(name.trim())
+                }}
+              >
+                新建
+              </button>
+            </div>
+            <div className="collection-toolbar__row collection-toolbar__row--tight">
+              <button
+                type="button"
+                className="ghost-button"
+                disabled={!activeCollectionId}
+                onClick={() => {
+                  if (!activeCollectionId) return
+                  const c = collections.find((x) => x.id === activeCollectionId)
+                  const name = window.prompt('重命名', c?.name ?? '')
+                  if (name != null && name.trim()) onRenameCollection(activeCollectionId, name.trim())
+                }}
+              >
+                重命名
+              </button>
+              <button
+                type="button"
+                className="ghost-button"
+                disabled={!activeCollectionId}
+                onClick={() => {
+                  if (!activeCollectionId) return
+                  if (window.confirm('删除该 collection？成员引用将一并删除。')) {
+                    onDeleteCollection(activeCollectionId)
+                  }
+                }}
+              >
+                删除
+              </button>
+            </div>
+          </div>
+        )}
 
+        {browseMode === 'sources' ? (
         <div className="source-rows">
           {sources.map((source) => {
             const sourceSkills = skills.filter((skill) => skill.sourceId === source.id)
@@ -211,7 +313,10 @@ export function SourceManager({
             )
           })}
         </div>
+        ) : null}
 
+        {browseMode === 'sources' ? (
+          <>
         <div className="source-add-trigger">
           <button
             className="ghost-button ghost-button--wide"
@@ -269,6 +374,8 @@ export function SourceManager({
               添加
             </button>
           </form>
+        ) : null}
+          </>
         ) : null}
       </div>
     </div>

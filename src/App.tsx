@@ -247,6 +247,13 @@ function App() {
   }, [browseMode, activeCollectionId, collectionsState.collections])
 
   useEffect(() => {
+    if (browseMode !== 'sources') return
+    if (activeSourceId === 'all') return
+    const count = skills.filter((s) => s.sourceId === activeSourceId).length
+    if (count === 0) setActiveSourceId('all')
+  }, [activeSourceId, browseMode, skills])
+
+  useEffect(() => {
     if (!isTauriRuntime()) return
 
     const setupListener = async () => {
@@ -291,6 +298,14 @@ function App() {
     }
     return m
   }, [collectionsState])
+
+  const skillCountBySourceId = useMemo(() => {
+    const m: Record<string, number> = {}
+    for (const s of skills) {
+      m[s.sourceId] = (m[s.sourceId] ?? 0) + 1
+    }
+    return m
+  }, [skills])
 
   const visibleSkills = useMemo(() => {
     const term = deferredSearchValue.trim().toLowerCase()
@@ -636,18 +651,18 @@ function App() {
     const { state: next, id } = createCollection(collectionsState, name)
     setCollectionsState(next)
     setActiveCollectionId(id)
-    setStatusLine('已新建 collection')
+    setStatusLine('已新建文件夹')
   }
 
   const handleRenameCollection = (id: string, name: string) => {
     setCollectionsState((prev) => renameCollection(prev, id, name))
-    setStatusLine('已重命名 collection')
+    setStatusLine('已重命名文件夹')
   }
 
   const handleDeleteCollection = (id: string) => {
     setCollectionsState((prev) => deleteCollection(prev, id))
     setActiveCollectionId((cur) => (cur === id ? '' : cur))
-    setStatusLine('已删除 collection')
+    setStatusLine('已删除文件夹')
   }
 
   const handleToggleSkillInCollection = (collectionId: string, add: boolean) => {
@@ -659,7 +674,7 @@ function App() {
   const handleRemoveFromActiveCollection = () => {
     if (!selectedSkill || !activeCollectionId) return
     setCollectionsState((prev) => removeSkillFromCollection(prev, selectedSkill, activeCollectionId))
-    setStatusLine('已从当前 collection 移除')
+    setStatusLine('已从当前文件夹移除')
   }
 
   return (
@@ -726,7 +741,6 @@ function App() {
             rawContent={loadedContent}
             onOpenFolder={(path) => void handleOpenPath(path)}
             onOpenSkill={(path) => void handleOpenPath(path)}
-            onEdit={(skill) => setEditorState({ mode: 'edit', skill })}
             onCopy={setCopyingSkill}
             browseMode={browseMode}
             activeCollectionId={activeCollectionId}
@@ -734,6 +748,7 @@ function App() {
             collectionIdsWithSkill={collectionIdsWithSkill}
             onToggleSkillInCollection={handleToggleSkillInCollection}
             onRemoveFromActiveCollection={handleRemoveFromActiveCollection}
+            skillCountBySourceId={skillCountBySourceId}
           />
         ) : null}
 
@@ -743,23 +758,28 @@ function App() {
             skills={visibleSkills}
             selectedSkillId={effectiveSelectedSkillId}
             onSelectSkill={setSelectedSkillId}
+            skillCountBySourceId={skillCountBySourceId}
           />
         ) : (
           <div className="tray-section">
             <EmptyState
+              className={browseMode === 'collections' ? 'empty-state--folder' : undefined}
+              eyebrow={
+                browseMode === 'collections' && !activeCollectionId ? null : undefined
+              }
               title={
                 browseMode === 'collections' && !activeCollectionId
-                  ? '请选择 collection'
+                  ? '请选择文件夹'
                   : browseMode === 'collections' && activeCollectionId
-                    ? '该 collection 暂无 skill'
+                    ? '该文件夹暂无 skill'
                     : '没有匹配的 skills'
               }
               description={
                 browseMode === 'collections' && !activeCollectionId
-                  ? '在上方新建或选择一个 collection，然后在来源模式下将 skill 勾选加入。'
+                  ? '在上方选择或新建；来源模式可勾选加入。'
                   : browseMode === 'collections' && activeCollectionId
-                    ? '在预览中把 skill 加入本 collection，或切换回来源模式浏览全部。'
-                    : '尝试开启更多来源、清空搜索词或新建 skill。'
+                    ? '在预览勾选加入，或切至来源浏览全部。'
+                    : '尝试开启更多来源、清空搜索或新建 skill。'
               }
               actionLabel="新建 skill"
               onAction={() => setEditorState({ mode: 'create' })}
@@ -792,6 +812,7 @@ function App() {
           key={copyingSkill.id}
           skill={copyingSkill}
           sources={sources}
+          skillCountBySourceId={skillCountBySourceId}
           onCancel={() => setCopyingSkill(null)}
           onConfirm={(targetSource, targetRelativePath) =>
             void handleCopySkill(targetSource, targetRelativePath)
@@ -808,6 +829,7 @@ function App() {
           source={copyingSource}
           sources={sources}
           skillCount={skills.filter((skill) => skill.sourceId === copyingSource.id).length}
+          skillCountBySourceId={skillCountBySourceId}
           onCancel={() => setCopyingSource(null)}
           onConfirm={(targetSource) =>
             void handleCopySource(copyingSource, targetSource)

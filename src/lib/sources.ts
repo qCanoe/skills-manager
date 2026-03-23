@@ -181,6 +181,12 @@ export function getSourceBadge(source: SourceConfig) {
       return 'Codex'
     case 'claude':
       return 'Claude'
+    case 'agents':
+      return 'Agents'
+    case 'windsurf':
+      return 'Windsurf'
+    case 'amp':
+      return 'Amp'
     default:
       return 'Custom'
   }

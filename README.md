@@ -2,7 +2,7 @@
 
 # Skills Manager
 
-一个基于 `Tauri` + `React` 构建的超轻量 Windows 托盘插件，用来集中管理 `Cursor`、`Codex`、`Claude` 和自定义目录中的 `SKILL.md`。
+一个基于 `Tauri` + `React` 构建的超轻量 Windows 托盘插件，用来集中管理多工具默认目录与自定义路径中的 `SKILL.md`（如 `Cursor`、`Codex`、`Claude`、`Cursor` rules、`~/.agents/skills`、Windsurf、Amp 等）。
 
 [概览](#概览) • [功能特性](#功能特性) • [快速开始](#快速开始) • [使用方式](#使用方式) • [Skill 目录结构](#skill-目录结构) • [开发说明](#开发说明) • [Roadmap](#roadmap)
 
@@ -14,7 +14,7 @@
 
 该项目适合以下场景：
 
-- 同时维护 `~/.cursor/skills`、`~/.codex/skills` 和团队自定义技能目录
+- 同时维护 `~/.cursor/skills`、rules、`~/.codex/skills`、`~/.claude/skills`、`~/.agents/skills`、Windsurf（Codeium / rules）、`~/.config/amp` 与团队自定义技能目录
 - 在一个桌面面板中快速搜索、浏览和预览 skill 内容与附加文件
 - 直接新建、编辑、复制单个 skill，或批量复制整个来源并处理冲突
 - 通过来源开关、可写筛选和托盘入口，把日常 skill 维护流程收拢成一个统一入口
@@ -30,7 +30,7 @@
 ## 功能特性
 
 - 多来源聚合：同时扫描多个 skill 根目录，并支持按来源筛选
-- 默认来源开箱即用：内置 `Cursor`、`Codex`、`Claude` 个人 skills 目录
+- 默认来源开箱即用：内置常见 agent 根目录（`Cursor` skills 与 rules、`Codex`、`Claude`、`~/.agents/skills`、Windsurf Codeium memories 与 rules、`Amp` 等）；**仅当目录下存在符合约定的 `SKILL.md` 子目录结构时才会出现在列表中**（空目录或仅有非 skill 文件会被扫描跳过）
 - 自定义来源管理：支持手动或系统文件夹对话框添加、启用/停用和删除自定义目录；支持将来源配置 **导出 / 导入 JSON** 以便备份或多机同步
 - Skill 检索：按名称、描述、来源、相对路径和正文摘要进行搜索
 - 只看可编辑内容：一键过滤只读来源，聚焦可修改的 skill

@@ -8,6 +8,7 @@ import { CopyConflictDialog } from './components/CopyConflictDialog'
 import { CopyDialog } from './components/CopyDialog'
 import { CopySourceDialog } from './components/CopySourceDialog'
 import { CommandBar } from './components/CommandBar'
+import { CollectionNameDialog } from './components/CollectionNameDialog'
 import { EmptyState } from './components/EmptyState'
 import { SkillEditor } from './components/SkillEditor'
 import { SkillList } from './components/SkillList'
@@ -125,6 +126,8 @@ function App() {
   const [statusLine, setStatusLine] = useState('准备来源...')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
+  const [createFolderFromPreviewOpen, setCreateFolderFromPreviewOpen] = useState(false)
+  const [createFolderFromPreviewKey, setCreateFolderFromPreviewKey] = useState(0)
 
   const pushToast = useCallback(
     (title: string, detail?: string, variant: ToastMessage['variant'] = 'success') => {
@@ -654,6 +657,23 @@ function App() {
     setStatusLine('已新建文件夹')
   }
 
+  const openCreateFolderFromPreview = () => {
+    setCreateFolderFromPreviewKey((k) => k + 1)
+    setCreateFolderFromPreviewOpen(true)
+  }
+
+  const handleConfirmCreateFolderFromPreview = (name: string) => {
+    const { state: next, id } = createCollection(collectionsState, name)
+    let state = next
+    if (selectedSkill) {
+      state = addMember(state, id, { sourceId: selectedSkill.sourceId, relativePath: selectedSkill.relativePath })
+    }
+    setCollectionsState(state)
+    setActiveCollectionId(id)
+    setStatusLine(selectedSkill ? '已新建文件夹并加入当前 skill' : '已新建文件夹')
+    setCreateFolderFromPreviewOpen(false)
+  }
+
   const handleRenameCollection = (id: string, name: string) => {
     setCollectionsState((prev) => renameCollection(prev, id, name))
     setStatusLine('已重命名文件夹')
@@ -747,6 +767,7 @@ function App() {
             allCollections={collectionsState.collections}
             collectionIdsWithSkill={collectionIdsWithSkill}
             onToggleSkillInCollection={handleToggleSkillInCollection}
+            onRequestCreateFolder={openCreateFolderFromPreview}
             onRemoveFromActiveCollection={handleRemoveFromActiveCollection}
             skillCountBySourceId={skillCountBySourceId}
           />
@@ -855,6 +876,16 @@ function App() {
           conflictPaths={copyConflict.conflictPaths}
           onCancel={() => setCopyConflict(null)}
           onConfirm={(strategy) => void executeSourceCopy(copyConflict.context, strategy)}
+        />
+      ) : null}
+
+      {createFolderFromPreviewOpen ? (
+        <CollectionNameDialog
+          key={createFolderFromPreviewKey}
+          mode="create"
+          initialName=""
+          onCancel={() => setCreateFolderFromPreviewOpen(false)}
+          onConfirm={handleConfirmCreateFolderFromPreview}
         />
       ) : null}
 

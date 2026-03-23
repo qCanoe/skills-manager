@@ -1062,6 +1062,36 @@
   overflow-y: auto;
 }
 
+.skill-drawer__folder-menu-new {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0 0 2px;
+  padding: 8px;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text);
+  text-align: left;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.skill-drawer__folder-menu-new:hover {
+  background: var(--bg-hover);
+}
+
+.skill-drawer__folder-menu-new.has-list-below {
+  margin-bottom: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
 .skill-drawer__folder-menu-row {
   display: flex;
   align-items: center;

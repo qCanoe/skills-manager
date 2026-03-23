@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
-import { ChevronDown, CopyPlus, FilePenLine, FolderOpen, SquareArrowOutUpRight } from 'lucide-react'
+import { useEffect, useId, useMemo, useRef, useState, useCallback } from 'react'
+import { ChevronDown, CopyPlus, FolderOpen, FolderPlus, SquareArrowOutUpRight } from 'lucide-react'
 
+import { filterPathEntriesBySourceSkillCount, pathEntriesForSkill } from '../lib/skills'
 import { renderMarkdownToSafeHtml } from '../lib/render-markdown'
 import type { SkillCollection } from '../lib/collections'
 import type { BrowseMode, SkillRecord } from '../types'
@@ -10,14 +11,17 @@ interface SkillPreviewProps {
   rawContent: string
   onOpenSkill: (path: string) => void
   onOpenFolder: (path: string) => void
-  onEdit: (skill: SkillRecord) => void
   onCopy: (skill: SkillRecord) => void
   browseMode?: BrowseMode
   activeCollectionId?: string
   allCollections?: SkillCollection[]
   collectionIdsWithSkill?: string[]
   onToggleSkillInCollection?: (collectionId: string, add: boolean) => void
+  /** Opens in-app dialog to create a folder (dropdown “新建”). */
+  onRequestCreateFolder?: () => void
   onRemoveFromActiveCollection?: () => void
+  /** Indexed skill counts per source (used to hide zero-skill sources from path list). */
+  skillCountBySourceId: Record<string, number>
 }
 
 export function SkillPreview({
@@ -25,17 +29,23 @@ export function SkillPreview({
   rawContent,
   onOpenSkill,
   onOpenFolder,
-  onEdit,
   onCopy,
   browseMode = 'sources',
   activeCollectionId = '',
   allCollections = [],
   collectionIdsWithSkill = [],
   onToggleSkillInCollection,
+  onRequestCreateFolder,
   onRemoveFromActiveCollection,
+  skillCountBySourceId,
 }: SkillPreviewProps) {
   const [renderedHtml, setRenderedHtml] = useState('')
   const [htmlReady, setHtmlReady] = useState(false)
+
+  const visiblePathEntries = useMemo(() => {
+    if (!skill) return []
+    return filterPathEntriesBySourceSkillCount(pathEntriesForSkill(skill), skillCountBySourceId)
+  }, [skill, skillCountBySourceId])
 
   useEffect(() => {
     // Reset fade while new markdown is parsed (source changed).
@@ -59,8 +69,34 @@ export function SkillPreview({
 
   const [isScrolling, setIsScrolling] = useState(false)
   const [expanded, setExpanded] = useState(true)
+  const [folderPickerOpen, setFolderPickerOpen] = useState(false)
+  const folderPickerRef = useRef<HTMLDivElement>(null)
+  const folderMenuId = useId()
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const scrollThrottleRef = useRef(0)
+
+  useEffect(() => {
+    // Close folder dropdown when viewing another skill (avoid stale open state).
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional UI reset on skill change
+    setFolderPickerOpen(false)
+  }, [skill?.id])
+
+  useEffect(() => {
+    if (!folderPickerOpen) return
+    const onDoc = (e: MouseEvent) => {
+      if (folderPickerRef.current?.contains(e.target as Node)) return
+      setFolderPickerOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFolderPickerOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [folderPickerOpen])
 
   const handleScroll = useCallback(() => {
     const now = performance.now()
@@ -118,42 +154,72 @@ export function SkillPreview({
             SKILL.md
           </button>
 
-          {skill.writable ? (
-            <button className="ghost-button" onClick={() => onEdit(skill)} type="button">
-              <FilePenLine size={12} />
-              编辑
-            </button>
+          {onToggleSkillInCollection && onRequestCreateFolder ? (
+            <div className="skill-drawer__folder-picker" ref={folderPickerRef}>
+              <button
+                type="button"
+                className="ghost-button skill-drawer__folder-trigger"
+                aria-expanded={folderPickerOpen}
+                aria-haspopup="true"
+                aria-controls={folderPickerOpen ? folderMenuId : undefined}
+                onClick={() => setFolderPickerOpen((o) => !o)}
+              >
+                <FolderPlus size={12} />
+                文件夹
+                <ChevronDown
+                  size={14}
+                  className={`skill-drawer__folder-chevron ${folderPickerOpen ? 'is-open' : ''}`}
+                  aria-hidden
+                />
+              </button>
+              {folderPickerOpen ? (
+                <div
+                  id={folderMenuId}
+                  className="skill-drawer__folder-menu"
+                  role="menu"
+                  aria-label="文件夹操作"
+                >
+                  <button
+                    type="button"
+                    className={`skill-drawer__folder-menu-new ${allCollections.length > 0 ? 'has-list-below' : ''}`}
+                    role="menuitem"
+                    onClick={() => {
+                      setFolderPickerOpen(false)
+                      onRequestCreateFolder()
+                    }}
+                  >
+                    <FolderPlus size={12} aria-hidden />
+                    新建
+                  </button>
+                  {allCollections.map((c) => {
+                    const checked = collectionIdsWithSkill.includes(c.id)
+                    return (
+                      <label key={c.id} className="skill-drawer__folder-menu-row">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => onToggleSkillInCollection(c.id, e.target.checked)}
+                        />
+                        <span className="skill-drawer__folder-menu-name">{c.name}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              ) : null}
+            </div>
           ) : null}
 
-          <button className="accent-button" onClick={() => onCopy(skill)} type="button">
+          <button className="ghost-button" onClick={() => onCopy(skill)} type="button">
             <CopyPlus size={12} />
             复制
           </button>
-
-          {allCollections.length > 0 && onToggleSkillInCollection ? (
-            <div className="skill-drawer__collections" aria-label="Collections">
-              <span className="skill-drawer__collections-label">加入 collection</span>
-              <div className="skill-drawer__collections-list">
-                {allCollections.map((c) => (
-                  <label key={c.id} className="skill-drawer__collection-check">
-                    <input
-                      type="checkbox"
-                      checked={collectionIdsWithSkill.includes(c.id)}
-                      onChange={(e) => onToggleSkillInCollection(c.id, e.target.checked)}
-                    />
-                    <span>{c.name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          ) : null}
 
           {browseMode === 'collections' &&
           activeCollectionId &&
           collectionIdsWithSkill.includes(activeCollectionId) &&
           onRemoveFromActiveCollection ? (
             <button className="ghost-button" type="button" onClick={() => onRemoveFromActiveCollection()}>
-              从当前集合移除
+              从当前文件夹移除
             </button>
           ) : null}
         </div>
@@ -163,12 +229,9 @@ export function SkillPreview({
             <div className="skill-drawer__meta">
               <div className="skill-drawer__meta-item skill-drawer__meta-item--full">
                 <span className="skill-drawer__meta-label">路径</span>
-                {skill.mergedPaths && skill.mergedPaths.length > 0 ? (
+                {visiblePathEntries.length > 1 ? (
                   <div className="skill-drawer__merged-paths">
-                    {[
-                      { sourceId: skill.sourceId, sourceLabel: skill.sourceLabel, relativePath: skill.relativePath, skillDir: skill.skillDir, skillFile: skill.skillFile, writable: skill.writable },
-                      ...skill.mergedPaths,
-                    ].map((p) => (
+                    {visiblePathEntries.map((p) => (
                       <div key={`${p.sourceId}:${p.relativePath}`} className="skill-drawer__merged-path">
                         <span className="skill-drawer__merged-path-text">
                           {p.sourceLabel} · {p.relativePath}
@@ -193,7 +256,11 @@ export function SkillPreview({
                     ))}
                   </div>
                 ) : (
-                  <span className="skill-drawer__meta-value">{skill.relativePath}</span>
+                  <span className="skill-drawer__meta-value">
+                    {visiblePathEntries[0]
+                      ? `${visiblePathEntries[0].sourceLabel} · ${visiblePathEntries[0].relativePath}`
+                      : skill.relativePath}
+                  </span>
                 )}
               </div>
               <div className="skill-drawer__meta-item">

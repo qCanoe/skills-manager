@@ -39,6 +39,7 @@
 - 跨来源复制：支持复制单个 skill 或整个来源到目标，可复制到内置来源或自定义路径，冲突时支持 `rename`、`overwrite`、`skip`
 - 桌面托盘交互：支持显示/隐藏窗口、重新扫描和退出应用；从其他窗口切回应用时会自动静默重新扫描
 - 快捷浏览：支持方向键在 skill 列表间移动
+- **Collections（本机）**：在来源区域切换「来源 / Collections」，自建多个 collection，用 `sourceId` + 相对路径引用 skill（仅存 `localStorage`，不复制文件）；在预览区可勾选加入/移出 collection，并在 Collections 模式下按当前 collection 筛选列表
 
 ## 快速开始
 

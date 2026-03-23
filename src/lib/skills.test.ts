@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { mergeSkillsByContent, normalizeSkills } from './skills'
+import {
+  filterPathEntriesBySourceSkillCount,
+  mergeSkillsByContent,
+  normalizeSkills,
+  pathEntriesForSkill,
+} from './skills'
 import type { RawSkillRecord, SkillRecord, SourceConfig } from '../types'
 
 const stubSource: SourceConfig = {
@@ -155,5 +160,30 @@ describe('mergeSkillsByContent', () => {
     const a = stubSkill({ id: 'a', name: 'foo', previewBody: 'content A' })
     const b = stubSkill({ id: 'b', name: 'foo', previewBody: 'content B' })
     expect(mergeSkillsByContent([a, b])).toHaveLength(2)
+  })
+})
+
+describe('filterPathEntriesBySourceSkillCount', () => {
+  it('drops merged paths when that source has zero indexed skills', () => {
+    const a = stubSkill({
+      id: 'a:path-a/SKILL.md',
+      sourceId: 'a',
+      sourceLabel: 'A',
+      relativePath: 'path-a/SKILL.md',
+      skillDir: '/a',
+    })
+    const b = stubSkill({
+      id: 'b:path-b/SKILL.md',
+      sourceId: 'b',
+      sourceLabel: 'B',
+      relativePath: 'path-b/SKILL.md',
+      skillDir: '/b',
+    })
+    const [merged] = mergeSkillsByContent([a, b])
+    expect(merged).toBeDefined()
+    const entries = pathEntriesForSkill(merged!)
+    expect(entries).toHaveLength(2)
+    expect(filterPathEntriesBySourceSkillCount(entries, { a: 1, b: 0 })).toHaveLength(1)
+    expect(filterPathEntriesBySourceSkillCount(entries, { a: 1, b: 1 })).toHaveLength(2)
   })
 })

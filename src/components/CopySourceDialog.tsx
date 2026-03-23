@@ -8,6 +8,8 @@ interface CopySourceDialogProps {
   source: SourceConfig
   sources: SourceConfig[]
   skillCount: number
+  /** Indexed skill counts per source; targets with 0 are omitted. */
+  skillCountBySourceId: Record<string, number>
   onCancel: () => void
   onConfirm: (targetSource: SourceConfig) => void
 }
@@ -16,6 +18,7 @@ export function CopySourceDialog({
   source,
   sources,
   skillCount,
+  skillCountBySourceId,
   onCancel,
   onConfirm,
 }: CopySourceDialogProps) {
@@ -29,9 +32,10 @@ export function CopySourceDialog({
         (target) =>
           target.writable &&
           target.id !== source.id &&
-          !isSameSourcePath(target.rootPath, source.rootPath),
+          !isSameSourcePath(target.rootPath, source.rootPath) &&
+          (skillCountBySourceId[target.id] ?? 0) > 0,
       ),
-    [source.id, source.rootPath, sources],
+    [source.id, source.rootPath, sources, skillCountBySourceId],
   )
 
   return (

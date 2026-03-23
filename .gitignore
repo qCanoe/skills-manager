@@ -64,6 +64,9 @@ coverage/
 *.swo
 *.orig
 
+# Docs (local / generated; not tracked)
+docs/
+
 # Misc
 *.local
 *.bak

@@ -8,12 +8,21 @@ import type { SkillRecord, SourceConfig } from '../types'
 interface CopyDialogProps {
   skill: SkillRecord
   sources: SourceConfig[]
+  /** Indexed skill counts per source; targets with 0 are omitted (same as source chips). */
+  skillCountBySourceId: Record<string, number>
   onCancel: () => void
   onConfirm: (targetSource: SourceConfig, targetRelativePath: string) => void
   onConfirmCustom: (customRootPath: string, targetRelativePath: string) => void
 }
 
-export function CopyDialog({ skill, sources, onCancel, onConfirm, onConfirmCustom }: CopyDialogProps) {
+export function CopyDialog({
+  skill,
+  sources,
+  skillCountBySourceId,
+  onCancel,
+  onConfirm,
+  onConfirmCustom,
+}: CopyDialogProps) {
   const panelRef = useRef<HTMLElement>(null)
   const titleId = useId()
   useModalDialog(panelRef, onCancel)
@@ -28,9 +37,10 @@ export function CopyDialog({ skill, sources, onCancel, onConfirm, onConfirmCusto
         (source) =>
           source.writable &&
           source.id !== skill.sourceId &&
-          !isSameSourcePath(source.rootPath, skill.rootPath),
+          !isSameSourcePath(source.rootPath, skill.rootPath) &&
+          (skillCountBySourceId[source.id] ?? 0) > 0,
       ),
-    [skill.rootPath, skill.sourceId, sources],
+    [skill.rootPath, skill.sourceId, sources, skillCountBySourceId],
   )
 
   return (

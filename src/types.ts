@@ -1,3 +1,5 @@
+export type BrowseMode = 'sources' | 'collections'
+
 export type SourceKind =
   | 'cursor'
   | 'codex'

@@ -219,6 +219,29 @@ export function mergeSkillsByContent(skills: SkillRecord[]): SkillRecord[] {
   return result.sort((a, b) => a.name.localeCompare(b.name))
 }
 
+/** Primary occurrence + merged alternate paths (for detail / list UI). */
+export function pathEntriesForSkill(skill: SkillRecord): SkillPathEntry[] {
+  return [
+    {
+      sourceId: skill.sourceId,
+      sourceLabel: skill.sourceLabel,
+      relativePath: skill.relativePath,
+      skillDir: skill.skillDir,
+      skillFile: skill.skillFile,
+      writable: skill.writable,
+    },
+    ...(skill.mergedPaths ?? []),
+  ]
+}
+
+/** Drop paths whose source currently has zero indexed skills (same rule as source chips / rows). */
+export function filterPathEntriesBySourceSkillCount(
+  entries: SkillPathEntry[],
+  countBySource: Record<string, number>,
+): SkillPathEntry[] {
+  return entries.filter((e) => (countBySource[e.sourceId] ?? 0) > 0)
+}
+
 export function normalizeSkills(
   rawSkills: RawSkillRecord[],
   sources: SourceConfig[],

@@ -8,12 +8,27 @@ import { CopyConflictDialog } from './components/CopyConflictDialog'
 import { CopyDialog } from './components/CopyDialog'
 import { CopySourceDialog } from './components/CopySourceDialog'
 import { CommandBar } from './components/CommandBar'
+import { CollectionNameDialog } from './components/CollectionNameDialog'
 import { EmptyState } from './components/EmptyState'
 import { SkillEditor } from './components/SkillEditor'
 import { SkillList } from './components/SkillList'
 import { SkillPreview } from './components/SkillPreview'
 import { SourceManager } from './components/SourceManager'
 import { ToastContainer, type ToastMessage } from './components/Toast'
+import {
+  addMember,
+  collectionIdsContainingSkill,
+  createCollection,
+  deleteCollection,
+  filterSkillsForCollection,
+  listMembers,
+  loadCollectionsState,
+  removeMember,
+  removeSkillFromCollection,
+  renameCollection,
+  saveCollectionsState,
+  type CollectionsState,
+} from './lib/collections'
 import { mergeSkillsByContent, normalizeSkills } from './lib/skills'
 import {
   buildSourcesExport,
@@ -26,7 +41,16 @@ import {
   persistSources,
   stringifySourcesExport,
 } from './lib/sources'
-import { loadActiveSource, loadWritableOnly, persistActiveSource, persistWritableOnly } from './lib/ui-state'
+import {
+  loadActiveCollectionId,
+  loadActiveSource,
+  loadBrowseMode,
+  loadWritableOnly,
+  persistActiveCollectionId,
+  persistActiveSource,
+  persistBrowseMode,
+  persistWritableOnly,
+} from './lib/ui-state'
 import type {
   CopyConflictStrategy,
   CopySkillRequest,
@@ -87,6 +111,9 @@ function App() {
   const [refreshSeq, setRefreshSeq] = useState(0)
   const [loadedContent, setLoadedContent] = useState('')
   const [activeSourceId, setActiveSourceId] = useState(loadActiveSource())
+  const [browseMode, setBrowseMode] = useState(loadBrowseMode)
+  const [activeCollectionId, setActiveCollectionId] = useState(loadActiveCollectionId)
+  const [collectionsState, setCollectionsState] = useState<CollectionsState>(() => loadCollectionsState())
   const [showWritableOnly, setShowWritableOnly] = useState(loadWritableOnly())
   const [searchValue, setSearchValue] = useState('')
   const [selectedSkillId, setSelectedSkillId] = useState<string>()
@@ -99,6 +126,8 @@ function App() {
   const [statusLine, setStatusLine] = useState('准备来源...')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
+  const [createFolderFromPreviewOpen, setCreateFolderFromPreviewOpen] = useState(false)
+  const [createFolderFromPreviewKey, setCreateFolderFromPreviewKey] = useState(0)
 
   const pushToast = useCallback(
     (title: string, detail?: string, variant: ToastMessage['variant'] = 'success') => {
@@ -203,6 +232,31 @@ function App() {
   }, [showWritableOnly])
 
   useEffect(() => {
+    persistBrowseMode(browseMode)
+  }, [browseMode])
+
+  useEffect(() => {
+    persistActiveCollectionId(activeCollectionId)
+  }, [activeCollectionId])
+
+  useEffect(() => {
+    saveCollectionsState(collectionsState)
+  }, [collectionsState])
+
+  useEffect(() => {
+    if (browseMode !== 'collections') return
+    if (activeCollectionId && collectionsState.collections.some((c) => c.id === activeCollectionId)) return
+    setActiveCollectionId(collectionsState.collections[0]?.id ?? '')
+  }, [browseMode, activeCollectionId, collectionsState.collections])
+
+  useEffect(() => {
+    if (browseMode !== 'sources') return
+    if (activeSourceId === 'all') return
+    const count = skills.filter((s) => s.sourceId === activeSourceId).length
+    if (count === 0) setActiveSourceId('all')
+  }, [activeSourceId, browseMode, skills])
+
+  useEffect(() => {
     if (!isTauriRuntime()) return
 
     const setupListener = async () => {
@@ -240,8 +294,38 @@ function App() {
 
   const deferredSearchValue = useDeferredValue(searchValue)
 
+  const collectionMemberCounts = useMemo(() => {
+    const m: Record<string, number> = {}
+    for (const c of collectionsState.collections) {
+      m[c.id] = listMembers(collectionsState, c.id).length
+    }
+    return m
+  }, [collectionsState])
+
+  const skillCountBySourceId = useMemo(() => {
+    const m: Record<string, number> = {}
+    for (const s of skills) {
+      m[s.sourceId] = (m[s.sourceId] ?? 0) + 1
+    }
+    return m
+  }, [skills])
+
   const visibleSkills = useMemo(() => {
     const term = deferredSearchValue.trim().toLowerCase()
+
+    if (browseMode === 'collections') {
+      if (!activeCollectionId || !collectionsState.collections.some((c) => c.id === activeCollectionId)) {
+        return []
+      }
+      const members = listMembers(collectionsState, activeCollectionId)
+      const inCollection = filterSkillsForCollection(skills, members)
+      const filtered = inCollection.filter((skill) => {
+        if (showWritableOnly && !skill.writable) return false
+        if (!term) return true
+        return skill.searchIndex.includes(term)
+      })
+      return mergeSkillsByContent(filtered)
+    }
 
     const filtered = skills.filter((skill) => {
       if (showWritableOnly && !skill.writable) return false
@@ -254,7 +338,15 @@ function App() {
     // When showing all sources, merge identical skills (same name + content)
     // that appear across multiple paths into a single entry.
     return activeSourceId === 'all' ? mergeSkillsByContent(filtered) : filtered
-  }, [activeSourceId, deferredSearchValue, showWritableOnly, skills])
+  }, [
+    activeCollectionId,
+    activeSourceId,
+    browseMode,
+    collectionsState,
+    deferredSearchValue,
+    showWritableOnly,
+    skills,
+  ])
 
   // Derive the effective selection synchronously during render to avoid a
   // one-frame gap where selectedSkillId still points to a skill from the
@@ -300,6 +392,12 @@ function App() {
   }, [effectiveSelectedSkillId, visibleSkills])
 
   const selectedSkill = visibleSkills.find((skill) => skill.id === effectiveSelectedSkillId)
+
+  const collectionIdsWithSkill = useMemo(() => {
+    if (!selectedSkill) return []
+    return collectionIdsContainingSkill(collectionsState, selectedSkill)
+  }, [collectionsState, selectedSkill])
+
   const selectedSkillFile = selectedSkill?.skillFile
 
   useEffect(() => {
@@ -548,6 +646,57 @@ function App() {
     })
   }
 
+  const handleBrowseModeChange = (mode: typeof browseMode) => {
+    setBrowseMode(mode)
+  }
+
+  const handleCreateCollection = (name: string) => {
+    const { state: next, id } = createCollection(collectionsState, name)
+    setCollectionsState(next)
+    setActiveCollectionId(id)
+    setStatusLine('已新建文件夹')
+  }
+
+  const openCreateFolderFromPreview = () => {
+    setCreateFolderFromPreviewKey((k) => k + 1)
+    setCreateFolderFromPreviewOpen(true)
+  }
+
+  const handleConfirmCreateFolderFromPreview = (name: string) => {
+    const { state: next, id } = createCollection(collectionsState, name)
+    let state = next
+    if (selectedSkill) {
+      state = addMember(state, id, { sourceId: selectedSkill.sourceId, relativePath: selectedSkill.relativePath })
+    }
+    setCollectionsState(state)
+    setActiveCollectionId(id)
+    setStatusLine(selectedSkill ? '已新建文件夹并加入当前 skill' : '已新建文件夹')
+    setCreateFolderFromPreviewOpen(false)
+  }
+
+  const handleRenameCollection = (id: string, name: string) => {
+    setCollectionsState((prev) => renameCollection(prev, id, name))
+    setStatusLine('已重命名文件夹')
+  }
+
+  const handleDeleteCollection = (id: string) => {
+    setCollectionsState((prev) => deleteCollection(prev, id))
+    setActiveCollectionId((cur) => (cur === id ? '' : cur))
+    setStatusLine('已删除文件夹')
+  }
+
+  const handleToggleSkillInCollection = (collectionId: string, add: boolean) => {
+    if (!selectedSkill) return
+    const ref = { sourceId: selectedSkill.sourceId, relativePath: selectedSkill.relativePath }
+    setCollectionsState((prev) => (add ? addMember(prev, collectionId, ref) : removeMember(prev, collectionId, ref)))
+  }
+
+  const handleRemoveFromActiveCollection = () => {
+    if (!selectedSkill || !activeCollectionId) return
+    setCollectionsState((prev) => removeSkillFromCollection(prev, selectedSkill, activeCollectionId))
+    setStatusLine('已从当前文件夹移除')
+  }
+
   return (
     <main className="app-shell">
       {/* Top: title + search */}
@@ -589,6 +738,15 @@ function App() {
           sources={sources}
           skills={skills}
           desktopFeatures={bootstrapped && isTauriRuntime()}
+          browseMode={browseMode}
+          onBrowseModeChange={handleBrowseModeChange}
+          collections={collectionsState.collections}
+          collectionMemberCounts={collectionMemberCounts}
+          activeCollectionId={activeCollectionId}
+          onSelectCollection={setActiveCollectionId}
+          onCreateCollection={handleCreateCollection}
+          onRenameCollection={handleRenameCollection}
+          onDeleteCollection={handleDeleteCollection}
           onSelectSource={setActiveSourceId}
           onToggleSource={handleToggleSource}
           onAddCustomSource={handleAddCustomSource}
@@ -603,8 +761,15 @@ function App() {
             rawContent={loadedContent}
             onOpenFolder={(path) => void handleOpenPath(path)}
             onOpenSkill={(path) => void handleOpenPath(path)}
-            onEdit={(skill) => setEditorState({ mode: 'edit', skill })}
             onCopy={setCopyingSkill}
+            browseMode={browseMode}
+            activeCollectionId={activeCollectionId}
+            allCollections={collectionsState.collections}
+            collectionIdsWithSkill={collectionIdsWithSkill}
+            onToggleSkillInCollection={handleToggleSkillInCollection}
+            onRequestCreateFolder={openCreateFolderFromPreview}
+            onRemoveFromActiveCollection={handleRemoveFromActiveCollection}
+            skillCountBySourceId={skillCountBySourceId}
           />
         ) : null}
 
@@ -614,12 +779,29 @@ function App() {
             skills={visibleSkills}
             selectedSkillId={effectiveSelectedSkillId}
             onSelectSkill={setSelectedSkillId}
+            skillCountBySourceId={skillCountBySourceId}
           />
         ) : (
           <div className="tray-section">
             <EmptyState
-              title="没有匹配的 skills"
-              description="尝试开启更多来源、清空搜索词或新建 skill。"
+              className={browseMode === 'collections' ? 'empty-state--folder' : undefined}
+              eyebrow={
+                browseMode === 'collections' && !activeCollectionId ? null : undefined
+              }
+              title={
+                browseMode === 'collections' && !activeCollectionId
+                  ? '请选择文件夹'
+                  : browseMode === 'collections' && activeCollectionId
+                    ? '该文件夹暂无 skill'
+                    : '没有匹配的 skills'
+              }
+              description={
+                browseMode === 'collections' && !activeCollectionId
+                  ? '在上方选择或新建；来源模式可勾选加入。'
+                  : browseMode === 'collections' && activeCollectionId
+                    ? '在预览勾选加入，或切至来源浏览全部。'
+                    : '尝试开启更多来源、清空搜索或新建 skill。'
+              }
               actionLabel="新建 skill"
               onAction={() => setEditorState({ mode: 'create' })}
             />
@@ -651,6 +833,7 @@ function App() {
           key={copyingSkill.id}
           skill={copyingSkill}
           sources={sources}
+          skillCountBySourceId={skillCountBySourceId}
           onCancel={() => setCopyingSkill(null)}
           onConfirm={(targetSource, targetRelativePath) =>
             void handleCopySkill(targetSource, targetRelativePath)
@@ -667,6 +850,7 @@ function App() {
           source={copyingSource}
           sources={sources}
           skillCount={skills.filter((skill) => skill.sourceId === copyingSource.id).length}
+          skillCountBySourceId={skillCountBySourceId}
           onCancel={() => setCopyingSource(null)}
           onConfirm={(targetSource) =>
             void handleCopySource(copyingSource, targetSource)
@@ -692,6 +876,16 @@ function App() {
           conflictPaths={copyConflict.conflictPaths}
           onCancel={() => setCopyConflict(null)}
           onConfirm={(strategy) => void executeSourceCopy(copyConflict.context, strategy)}
+        />
+      ) : null}
+
+      {createFolderFromPreviewOpen ? (
+        <CollectionNameDialog
+          key={createFolderFromPreviewKey}
+          mode="create"
+          initialName=""
+          onCancel={() => setCreateFolderFromPreviewOpen(false)}
+          onConfirm={handleConfirmCreateFolderFromPreview}
         />
       ) : null}
 

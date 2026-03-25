@@ -1,3 +1,9 @@
+---
+description: Skills Manager — design context and implementation rules for AI assistants
+globs:
+  - "**/*"
+---
+
 # Skills Manager — AI / design rules
 
 ## Design Context

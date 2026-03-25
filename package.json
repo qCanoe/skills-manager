@@ -4,11 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "test": "vitest run",
-    "preview": "vite preview",
+    "dev": "vite --config config/vite.config.ts",
+    "build": "tsc -b && vite build --config config/vite.config.ts",
+    "lint": "eslint . -c config/eslint.config.js",
+    "test": "vitest run --config config/vitest.config.ts",
+    "preview": "vite preview --config config/vite.config.ts",
     "tauri": "tauri"
   },
   "dependencies": {

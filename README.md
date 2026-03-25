@@ -6,8 +6,8 @@
 
 <table>
   <tr>
-    <td><img src="image/readme/image1.png" alt="主界面" width="400" /></td>
-    <td><img src="image/readme/image2.png" alt="复制功能" width="400" /></td>
+    <td><img src="assets/readme/image1.png" alt="主界面" width="400" /></td>
+    <td><img src="assets/readme/image2.png" alt="复制功能" width="400" /></td>
   </tr>
 </table>
 
@@ -98,11 +98,17 @@ description: 描述该 skill 的用途
 
 ### 项目结构
 
+根目录保留 Vite 约定的 `index.html`、npm 的 `package.json`，以及 TypeScript 的解决方案入口 `tsconfig.json`（通过 `references` 指向 `config/` 内的子配置）。具体工具配置均在 `config/` 目录。
+
 | 目录 | 职责 |
 | --- | --- |
+| `config/` | Vite / Vitest / ESLint / TypeScript 工程配置（除根级 `tsconfig.json` 解决方案入口） |
 | `src/` | 前端界面、来源管理、搜索筛选、预览与编辑 |
 | `src/lib/` | Skill 元数据解析、来源持久化、UI 状态 |
 | `src-tauri/src/` | 文件扫描、写入、目录复制、托盘与窗口管理 |
+| `public/` | 静态资源（构建时原样复制） |
+| `assets/readme/` | README 截图等文档用资源 |
+| `.cursor/rules/` | Cursor 规则（原 `.cursorrules` 内容迁移至此） |
 
 ### 版本号同步
 

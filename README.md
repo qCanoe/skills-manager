@@ -1,6 +1,6 @@
 # Skills Manager
 
-> 基于 Tauri + React 的轻量桌面托盘应用，集中管理多个 AI Agent 工具的 `SKILL.md` 文件。
+> 基于 Tauri + React 的轻量Windows桌面托盘应用，集中管理多个 AI Agent 工具的 `SKILL.md` 文件。
 
 支持 Cursor、Codex、Claude Code、Windsurf、Amp 等工具的 skills 目录，统一扫描、浏览、编辑与跨来源复制。
 

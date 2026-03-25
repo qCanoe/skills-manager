@@ -24,7 +24,6 @@ import {
   listMembers,
   loadCollectionsState,
   removeMember,
-  removeSkillFromCollection,
   renameCollection,
   saveCollectionsState,
   type CollectionsState,
@@ -128,6 +127,19 @@ function App() {
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const [createFolderFromPreviewOpen, setCreateFolderFromPreviewOpen] = useState(false)
   const [createFolderFromPreviewKey, setCreateFolderFromPreviewKey] = useState(0)
+  const [isTrayScrolling, setIsTrayScrolling] = useState(false)
+  const trayHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const trayScrollThrottle = useRef(0)
+
+  const handleTrayScroll = useCallback(() => {
+    const now = performance.now()
+    if (now - trayScrollThrottle.current > 80) {
+      trayScrollThrottle.current = now
+      setIsTrayScrolling(true)
+    }
+    if (trayHideTimer.current) clearTimeout(trayHideTimer.current)
+    trayHideTimer.current = setTimeout(() => setIsTrayScrolling(false), 500)
+  }, [])
 
   const pushToast = useCallback(
     (title: string, detail?: string, variant: ToastMessage['variant'] = 'success') => {
@@ -691,12 +703,6 @@ function App() {
     setCollectionsState((prev) => (add ? addMember(prev, collectionId, ref) : removeMember(prev, collectionId, ref)))
   }
 
-  const handleRemoveFromActiveCollection = () => {
-    if (!selectedSkill || !activeCollectionId) return
-    setCollectionsState((prev) => removeSkillFromCollection(prev, selectedSkill, activeCollectionId))
-    setStatusLine('已从当前文件夹移除')
-  }
-
   return (
     <main className="app-shell">
       {/* Top: title + search */}
@@ -731,7 +737,7 @@ function App() {
       ) : null}
 
       {/* Scrollable middle body */}
-      <div className="tray-body">
+      <div className={`tray-body ${isTrayScrolling ? 'is-scrolling' : ''}`} onScroll={handleTrayScroll}>
         {/* Source section */}
         <SourceManager
           activeSourceId={activeSourceId}
@@ -762,13 +768,10 @@ function App() {
             onOpenFolder={(path) => void handleOpenPath(path)}
             onOpenSkill={(path) => void handleOpenPath(path)}
             onCopy={setCopyingSkill}
-            browseMode={browseMode}
-            activeCollectionId={activeCollectionId}
             allCollections={collectionsState.collections}
             collectionIdsWithSkill={collectionIdsWithSkill}
             onToggleSkillInCollection={handleToggleSkillInCollection}
             onRequestCreateFolder={openCreateFolderFromPreview}
-            onRemoveFromActiveCollection={handleRemoveFromActiveCollection}
             skillCountBySourceId={skillCountBySourceId}
           />
         ) : null}

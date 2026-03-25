@@ -138,7 +138,8 @@ export function CommandBar({
           <button
             className={`icon-button ${writableOnly ? 'is-active' : ''}`}
             onClick={onToggleWritable}
-            title={writableOnly ? '显示全部' : '仅显示可编辑'}
+            data-tooltip={writableOnly ? '显示全部' : '仅显示可编辑'}
+            data-tooltip-dir="down"
             type="button"
           >
             <Filter size={14} />
@@ -147,7 +148,8 @@ export function CommandBar({
           <button
             className={`icon-button ${refreshBusy ? 'is-active' : ''}`}
             onClick={() => void handleRefreshClick()}
-            title="重新扫描"
+            data-tooltip="重新扫描"
+            data-tooltip-dir="down"
             type="button"
             aria-busy={refreshBusy}
             aria-label={refreshBusy ? '正在扫描…' : '重新扫描'}
@@ -161,7 +163,7 @@ export function CommandBar({
             />
           </button>
 
-          <button className="icon-button" onClick={onCreate} title="新建" type="button">
+          <button className="icon-button" onClick={onCreate} data-tooltip="新建" data-tooltip-dir="down" type="button">
             <Plus size={16} />
           </button>
 
@@ -183,7 +185,8 @@ export function CommandBar({
                 aria-haspopup="menu"
                 aria-controls={settingsMenuId}
                 aria-label={settingsOpen ? '关闭设置菜单' : '打开设置：导入或导出来源配置'}
-                title="设置"
+                data-tooltip="设置"
+                data-tooltip-dir="down"
                 onClick={() => setSettingsOpen((open) => !open)}
               >
                 <Settings size={14} strokeWidth={2} aria-hidden="true" />

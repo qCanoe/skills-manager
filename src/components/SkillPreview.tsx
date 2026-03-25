@@ -4,7 +4,7 @@ import { ChevronDown, CopyPlus, FolderOpen, FolderPlus, SquareArrowOutUpRight } 
 import { filterPathEntriesBySourceSkillCount, pathEntriesForSkill } from '../lib/skills'
 import { renderMarkdownToSafeHtml } from '../lib/render-markdown'
 import type { SkillCollection } from '../lib/collections'
-import type { BrowseMode, SkillPathEntry, SkillRecord } from '../types'
+import type { SkillPathEntry, SkillRecord } from '../types'
 
 interface SkillPreviewProps {
   skill?: SkillRecord
@@ -12,14 +12,11 @@ interface SkillPreviewProps {
   onOpenSkill: (path: string) => void
   onOpenFolder: (path: string) => void
   onCopy: (skill: SkillRecord) => void
-  browseMode?: BrowseMode
-  activeCollectionId?: string
   allCollections?: SkillCollection[]
   collectionIdsWithSkill?: string[]
   onToggleSkillInCollection?: (collectionId: string, add: boolean) => void
   /** Opens in-app dialog to create a folder (dropdown “新建”). */
   onRequestCreateFolder?: () => void
-  onRemoveFromActiveCollection?: () => void
   /** Indexed skill counts per source (used to hide zero-skill sources from path list). */
   skillCountBySourceId: Record<string, number>
 }
@@ -30,13 +27,10 @@ export function SkillPreview({
   onOpenSkill,
   onOpenFolder,
   onCopy,
-  browseMode = 'sources',
-  activeCollectionId = '',
   allCollections = [],
   collectionIdsWithSkill = [],
   onToggleSkillInCollection,
   onRequestCreateFolder,
-  onRemoveFromActiveCollection,
   skillCountBySourceId,
 }: SkillPreviewProps) {
   const [renderedHtml, setRenderedHtml] = useState('')
@@ -105,7 +99,7 @@ export function SkillPreview({
       setIsScrolling(true)
     }
     if (hideTimer.current) clearTimeout(hideTimer.current)
-    hideTimer.current = setTimeout(() => setIsScrolling(false), 800)
+    hideTimer.current = setTimeout(() => setIsScrolling(false), 500)
   }, [])
 
   if (!skill) return null
@@ -214,14 +208,6 @@ export function SkillPreview({
             复制
           </button>
 
-          {browseMode === 'collections' &&
-          activeCollectionId &&
-          collectionIdsWithSkill.includes(activeCollectionId) &&
-          onRemoveFromActiveCollection ? (
-            <button className="ghost-button" type="button" onClick={() => onRemoveFromActiveCollection()}>
-              从当前文件夹移除
-            </button>
-          ) : null}
         </div>
 
         {expanded && (
@@ -240,7 +226,7 @@ export function SkillPreview({
                           className="ghost-button ghost-button--xs"
                           type="button"
                           onClick={() => onOpenFolder(p.skillDir)}
-                          title="打开文件夹"
+                          data-tooltip="打开文件夹"
                         >
                           <FolderOpen size={11} />
                         </button>
@@ -248,7 +234,7 @@ export function SkillPreview({
                           className="ghost-button ghost-button--xs"
                           type="button"
                           onClick={() => onOpenSkill(p.skillFile)}
-                          title="打开 SKILL.md"
+                          data-tooltip="打开 SKILL.md"
                         >
                           <SquareArrowOutUpRight size={11} />
                         </button>

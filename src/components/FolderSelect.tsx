@@ -1,5 +1,6 @@
 import { ChevronDown } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import type { SkillCollection } from '../lib/collections'
 
@@ -22,6 +23,8 @@ export function FolderSelect({
 }: FolderSelectProps) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({})
   const listboxId = useId()
 
   const selected = collections.find((c) => c.id === value)
@@ -50,6 +53,20 @@ export function FolderSelect({
     return () => document.removeEventListener('keydown', onKey)
   }, [open])
 
+  const openMenu = () => {
+    if (triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect()
+      setMenuStyle({
+        position: 'fixed',
+        top: r.bottom + 4,
+        left: r.left,
+        width: r.width,
+        zIndex: 9999,
+      })
+    }
+    setOpen(true)
+  }
+
   const pick = (next: string) => {
     onChange(next)
     setOpen(false)
@@ -59,12 +76,13 @@ export function FolderSelect({
     <div className="folder-select" ref={wrapRef}>
       <button
         id={id}
+        ref={triggerRef}
         type="button"
         className="folder-select__trigger"
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listboxId}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => open ? setOpen(false) : openMenu()}
       >
         <span className={`folder-select__value ${isPlaceholder ? 'is-placeholder' : ''}`}>
           {displayLabel}
@@ -77,12 +95,13 @@ export function FolderSelect({
         />
       </button>
 
-      {open ? (
+      {open ? createPortal(
         <ul
           id={listboxId}
           className="folder-select__menu"
           role="listbox"
           aria-labelledby={id}
+          style={menuStyle}
         >
           <li role="presentation" className="folder-select__li">
             <button
@@ -113,7 +132,8 @@ export function FolderSelect({
               </li>
             )
           })}
-        </ul>
+        </ul>,
+        document.body
       ) : null}
     </div>
   )

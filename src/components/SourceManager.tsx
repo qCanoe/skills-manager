@@ -1,4 +1,4 @@
-import { ChevronDown, CopyPlus, Folder, FolderOpen, FolderPlus, Layers, Trash2, X } from 'lucide-react'
+import { ChevronDown, CopyPlus, Folder, FolderOpen, FolderPlus, Layers, Pencil, Trash2, X } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
 
 import { CollectionNameDialog } from './CollectionNameDialog'
@@ -116,8 +116,8 @@ export function SourceManager({
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed((v) => !v) } }}
       >
         <div className="tray-section-header__left">
-          <Layers size={14} style={{ color: 'var(--text-faint)' }} />
-          <span className="tray-section-label">来源</span>
+          {browseMode === 'collections' ? <Folder size={14} style={{ color: 'var(--text-faint)' }} /> : <Layers size={14} style={{ color: 'var(--text-faint)' }} />}
+          <span className="tray-section-label">{browseMode === 'collections' ? '文件夹' : '来源'}</span>
         </div>
         <div className="tray-section-header__right">
           <span className="tray-section-status">{sources.filter((s) => s.enabled).length} 已启用</span>
@@ -209,9 +209,6 @@ export function SourceManager({
         ) : (
           <div key="folders" className="browse-panel__surface">
           <div className="collection-toolbar">
-            <label className="collection-toolbar__label" htmlFor="collection-select">
-              当前文件夹
-            </label>
             <div className="collection-toolbar__primary">
               <FolderSelect
                 id="collection-select"
@@ -221,49 +218,55 @@ export function SourceManager({
                 onChange={onSelectCollection}
                 placeholder="选择文件夹…"
               />
+              <div className="collection-toolbar__actions" role="group" aria-label="所选文件夹操作">
               <button
                 type="button"
-                className="ghost-button collection-toolbar__new-btn"
+                className="icon-button icon-button--create"
+                data-tooltip="新建文件夹"
+                aria-label="新建文件夹"
                 onClick={() => {
                   setCollectionNameDialogKey((k) => k + 1)
                   setNameModal({ mode: 'create' })
                 }}
               >
-                新建
+                <FolderPlus size={13} />
               </button>
-            </div>
-            <div className="collection-toolbar__secondary" role="group" aria-label="所选文件夹操作">
-              <button
-                type="button"
-                className="ghost-button"
-                disabled={!activeCollectionId}
-                onClick={() => {
-                  if (!activeCollectionId) return
-                  const c = collections.find((x) => x.id === activeCollectionId)
-                  if (!c) return
-                  setCollectionNameDialogKey((k) => k + 1)
-                  setNameModal({
-                    mode: 'rename',
-                    collectionId: activeCollectionId,
-                    initialName: c.name,
-                  })
-                }}
-              >
-                重命名
-              </button>
-              <button
-                type="button"
-                className="ghost-button"
-                disabled={!activeCollectionId}
-                onClick={() => {
-                  if (!activeCollectionId) return
-                  const c = collections.find((x) => x.id === activeCollectionId)
-                  if (!c) return
-                  setDeleteModal({ id: activeCollectionId, name: c.name })
-                }}
-              >
-                删除
-              </button>
+                <button
+                  type="button"
+                  className="icon-button icon-button--edit"
+                  disabled={!activeCollectionId}
+                  data-tooltip="重命名"
+                  aria-label="重命名文件夹"
+                  onClick={() => {
+                    if (!activeCollectionId) return
+                    const c = collections.find((x) => x.id === activeCollectionId)
+                    if (!c) return
+                    setCollectionNameDialogKey((k) => k + 1)
+                    setNameModal({
+                      mode: 'rename',
+                      collectionId: activeCollectionId,
+                      initialName: c.name,
+                    })
+                  }}
+                >
+                  <Pencil size={13} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-button icon-button--danger"
+                  disabled={!activeCollectionId}
+                  data-tooltip="删除"
+                  aria-label="删除文件夹"
+                  onClick={() => {
+                    if (!activeCollectionId) return
+                    const c = collections.find((x) => x.id === activeCollectionId)
+                    if (!c) return
+                    setDeleteModal({ id: activeCollectionId, name: c.name })
+                  }}
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
             </div>
           </div>
           </div>
@@ -397,7 +400,7 @@ export function SourceManager({
                   className="ghost-button"
                   disabled={!desktopFeatures}
                   onClick={() => void pickFolder()}
-                  title={desktopFeatures ? '使用系统对话框选择文件夹' : '仅在桌面应用中可用'}
+                  data-tooltip={desktopFeatures ? '使用系统对话框选择文件夹' : '仅在桌面应用中可用'}
                   type="button"
                 >
                   <FolderOpen size={14} />

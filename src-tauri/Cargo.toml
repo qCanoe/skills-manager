@@ -18,7 +18,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.5.6", features = [] }
 
 [dependencies]
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking", "json"] }
 dirs = "6"
 log = "0.4"
 serde_json = "1.0"

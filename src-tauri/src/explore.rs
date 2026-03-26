@@ -6,44 +6,59 @@ use std::{
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-#[derive(Debug, Default)]
+/// Session-level cache. Cleared by the frontend refresh action.
+#[derive(Default)]
 pub struct ExploreCache {
-  pub index: HashMap<String, ExploreEntry>,
+  /// key: "owner/repo" → list of skills under that registry
+  pub index: HashMap<String, Vec<ExploreEntry>>,
+  /// key: "owner/repo::path/to/SKILL.md"
   pub content: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ExploreEntry {}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct GitHubTreeResponse {
-  tree: Vec<GitHubTreeItem>,
-  truncated: bool,
+pub struct ExploreEntry {
+  pub path: String,       // "skills/creative/art-gen/SKILL.md"
+  pub skill_dir: String,  // "skills/creative/art-gen"
+  pub name: String,       // "art gen"
+  pub category: String,   // "creative"
 }
 
-#[derive(Debug, Deserialize)]
+// GitHub API response shapes (used in Task 2+)
+#[derive(Deserialize)]
+#[allow(dead_code)]
+struct GitHubTreeResponse {
+  truncated: bool,
+  tree: Vec<GitHubTreeItem>,
+}
+
+#[derive(Deserialize)]
 #[allow(dead_code)]
 struct GitHubTreeItem {
   path: String,
-  mode: String,
   #[serde(rename = "type")]
   item_type: String,
-  sha: Option<String>,
-  size: Option<u64>,
-  url: Option<String>,
 }
 
 #[tauri::command]
 pub fn explore_list_skills(
+  _owner: String,
+  _repo: String,
+  _branch: String,
+  _skills_path: String,
   _state: State<'_, Mutex<ExploreCache>>,
 ) -> Result<Vec<ExploreEntry>, String> {
   Ok(vec![])
 }
 
 #[tauri::command]
-pub fn explore_fetch_skill(_path: String) -> Result<String, String> {
+pub fn explore_fetch_skill(
+  _owner: String,
+  _repo: String,
+  _branch: String,
+  _path: String,
+  _state: State<'_, Mutex<ExploreCache>>,
+) -> Result<String, String> {
   Ok(String::new())
 }
 

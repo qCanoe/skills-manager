@@ -1,11 +1,12 @@
-import { ChevronDown, CopyPlus, Folder, FolderOpen, FolderPlus, Layers, Pencil, Trash2, X } from 'lucide-react'
+import { ChevronDown, Compass, CopyPlus, Folder, FolderOpen, FolderPlus, Layers, Pencil, Trash2, X } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
 
 import { CollectionNameDialog } from './CollectionNameDialog'
 import { ConfirmDialog } from './ConfirmDialog'
+import { ExplorePanel } from './ExplorePanel'
 import { FolderSelect } from './FolderSelect'
 import { getSourceBadge } from '../lib/sources'
-import type { BrowseMode, SourceConfig, SkillRecord } from '../types'
+import type { BrowseMode, ExploreEntry, ExploreRegistry, SourceConfig, SkillRecord } from '../types'
 import type { SkillCollection } from '../lib/collections'
 
 interface SourceManagerProps {
@@ -29,6 +30,9 @@ interface SourceManagerProps {
   onRemoveSource: (sourceId: string) => void
   onExportSources?: () => void | Promise<void>
   onImportSourcesText?: (json: string) => void | Promise<void>
+  onExploreEntriesChange: (entries: ExploreEntry[], registry: ExploreRegistry) => void
+  onExploreError: (msg: string) => void
+  exploreRefreshKey?: number
 }
 
 export function SourceManager({
@@ -50,6 +54,9 @@ export function SourceManager({
   onAddCustomSource,
   onCopySource,
   onRemoveSource,
+  onExploreEntriesChange,
+  onExploreError,
+  exploreRefreshKey = 0,
 }: SourceManagerProps) {
   type NameModalState =
     | { mode: 'create' }
@@ -116,8 +123,16 @@ export function SourceManager({
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed((v) => !v) } }}
       >
         <div className="tray-section-header__left">
-          {browseMode === 'collections' ? <Folder size={14} style={{ color: 'var(--text-faint)' }} /> : <Layers size={14} style={{ color: 'var(--text-faint)' }} />}
-          <span className="tray-section-label">{browseMode === 'collections' ? '文件夹' : '来源'}</span>
+          {browseMode === 'collections' ? (
+            <Folder size={14} style={{ color: 'var(--text-faint)' }} />
+          ) : browseMode === 'explore' ? (
+            <Compass size={14} style={{ color: 'var(--text-faint)' }} />
+          ) : (
+            <Layers size={14} style={{ color: 'var(--text-faint)' }} />
+          )}
+          <span className="tray-section-label">
+            {browseMode === 'collections' ? '文件夹' : browseMode === 'explore' ? '探索' : '来源'}
+          </span>
         </div>
         <div className="tray-section-header__right">
           <span className="tray-section-status">{sources.filter((s) => s.enabled).length} 已启用</span>
@@ -136,7 +151,9 @@ export function SourceManager({
           className="browse-mode-segment"
           role="tablist"
           aria-label="浏览方式"
-          data-active={browseMode === 'sources' ? 'sources' : 'folders'}
+          data-active={
+            browseMode === 'sources' ? 'sources' : browseMode === 'collections' ? 'folders' : 'explore'
+          }
         >
           <span className="browse-mode-segment__thumb" aria-hidden="true" />
           <button
@@ -163,13 +180,29 @@ export function SourceManager({
             <Folder size={13} strokeWidth={2} className="browse-mode-segment__icon" aria-hidden />
             文件夹
           </button>
+          <button
+            type="button"
+            role="tab"
+            id={`${sectionContentId}-tab-explore`}
+            aria-controls={browsePanelId}
+            aria-selected={browseMode === 'explore'}
+            className={`browse-mode-segment__btn ${browseMode === 'explore' ? 'is-active' : ''}`}
+            onClick={() => onBrowseModeChange('explore')}
+          >
+            <Compass size={13} strokeWidth={2} className="browse-mode-segment__icon" aria-hidden />
+            探索
+          </button>
         </div>
 
         <div
           id={browsePanelId}
           role="tabpanel"
           aria-labelledby={
-            browseMode === 'sources' ? `${sectionContentId}-tab-sources` : `${sectionContentId}-tab-folders`
+            browseMode === 'sources'
+              ? `${sectionContentId}-tab-sources`
+              : browseMode === 'collections'
+                ? `${sectionContentId}-tab-folders`
+                : `${sectionContentId}-tab-explore`
           }
           className="browse-panel"
         >
@@ -206,7 +239,7 @@ export function SourceManager({
             ))}
         </div>
         </div>
-        ) : (
+        ) : browseMode === 'collections' ? (
           <div key="folders" className="browse-panel__surface">
           <div className="collection-toolbar">
             <div className="collection-toolbar__primary">
@@ -269,6 +302,14 @@ export function SourceManager({
               </div>
             </div>
           </div>
+          </div>
+        ) : (
+          <div key="explore" className="browse-panel__surface">
+            <ExplorePanel
+              refreshKey={exploreRefreshKey}
+              onEntriesChange={onExploreEntriesChange}
+              onError={onExploreError}
+            />
           </div>
         )}
         </div>

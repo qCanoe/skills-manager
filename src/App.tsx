@@ -10,6 +10,7 @@ import { CopySourceDialog } from './components/CopySourceDialog'
 import { CommandBar } from './components/CommandBar'
 import { CollectionNameDialog } from './components/CollectionNameDialog'
 import { EmptyState } from './components/EmptyState'
+import { InstallDialog } from './components/InstallDialog'
 import { SkillEditor } from './components/SkillEditor'
 import { SkillList } from './components/SkillList'
 import { SkillPreview } from './components/SkillPreview'
@@ -28,6 +29,13 @@ import {
   saveCollectionsState,
   type CollectionsState,
 } from './lib/collections'
+import {
+  adaptExploreEntryToSkillRecord,
+  BUILT_IN_REGISTRIES,
+  clearExploreCache,
+  fetchExploreSkillContent,
+  parseExploreSkillContent,
+} from './lib/explore'
 import { mergeSkillsByContent, normalizeSkills } from './lib/skills'
 import {
   buildSourcesExport,
@@ -56,6 +64,8 @@ import type {
   CopySourceResult,
   CopySourceRequest,
   CopySkillResult,
+  ExploreEntry,
+  ExploreRegistry,
   RawSkillRecord,
   SkillRecord,
   SourceConfig,
@@ -127,6 +137,11 @@ function App() {
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const [createFolderFromPreviewOpen, setCreateFolderFromPreviewOpen] = useState(false)
   const [createFolderFromPreviewKey, setCreateFolderFromPreviewKey] = useState(0)
+  const [exploreEntries, setExploreEntries] = useState<ExploreEntry[]>([])
+  const [exploreRegistry, setExploreRegistry] = useState<ExploreRegistry>(BUILT_IN_REGISTRIES[0]!)
+  const [exploreContentMap, setExploreContentMap] = useState<Map<string, string>>(() => new Map())
+  const [exploreRefreshKey, setExploreRefreshKey] = useState(0)
+  const [installingEntry, setInstallingEntry] = useState<ExploreEntry | null>(null)
   const [isTrayScrolling, setIsTrayScrolling] = useState(false)
   const trayHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const trayScrollThrottle = useRef(0)
@@ -189,14 +204,29 @@ function App() {
     [],
   )
 
+  const handleExploreEntriesChange = useCallback((entries: ExploreEntry[], registry: ExploreRegistry) => {
+    setExploreRegistry(registry)
+    setExploreEntries(entries)
+    setSelectedSkillId(undefined)
+  }, [])
+
   const handleToolbarRefresh = useCallback(async () => {
+    if (browseMode === 'explore') {
+      if (isTauriRuntime()) {
+        await clearExploreCache()
+      }
+      setExploreContentMap(new Map())
+      setExploreRefreshKey((k) => k + 1)
+      pushToast('已重新加载探索索引')
+      return
+    }
     const result = await refreshSkills(sources)
     if (result.ok) {
       pushToast('扫描完成', `已索引 ${result.count} 个 skills`)
     } else {
       pushToast('扫描失败', '请查看上方错误说明', 'error')
     }
-  }, [pushToast, refreshSkills, sources])
+  }, [browseMode, pushToast, refreshSkills, sources])
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -325,6 +355,16 @@ function App() {
   const visibleSkills = useMemo(() => {
     const term = deferredSearchValue.trim().toLowerCase()
 
+    if (browseMode === 'explore') {
+      const mapped = exploreEntries.map((entry) => {
+        const raw = exploreContentMap.get(entry.path)
+        const loaded = raw ? parseExploreSkillContent(raw) : undefined
+        return adaptExploreEntryToSkillRecord(entry, exploreRegistry, loaded)
+      })
+      if (!term) return mapped
+      return mapped.filter((s) => s.searchIndex.includes(term))
+    }
+
     if (browseMode === 'collections') {
       if (!activeCollectionId || !collectionsState.collections.some((c) => c.id === activeCollectionId)) {
         return []
@@ -356,6 +396,9 @@ function App() {
     browseMode,
     collectionsState,
     deferredSearchValue,
+    exploreContentMap,
+    exploreEntries,
+    exploreRegistry,
     showWritableOnly,
     skills,
   ])
@@ -413,7 +456,14 @@ function App() {
   const selectedSkillFile = selectedSkill?.skillFile
 
   useEffect(() => {
-    if (!selectedSkillFile || !isTauriRuntime()) { setLoadedContent(''); return }
+    if (!selectedSkillFile || !isTauriRuntime()) {
+      setLoadedContent('')
+      return
+    }
+    if (selectedSkill?.sourceKind === 'explore') {
+      setLoadedContent('')
+      return
+    }
 
     let cancelled = false
     setLoadedContent('')
@@ -421,7 +471,55 @@ function App() {
       .then((content) => { if (!cancelled) setLoadedContent(content) })
       .catch((err) => { if (!cancelled) setErrorMessage(err instanceof Error ? err.message : String(err)) })
     return () => { cancelled = true }
-  }, [selectedSkillFile, refreshSeq])
+  }, [selectedSkillFile, selectedSkill?.sourceKind, refreshSeq])
+
+  const previewRawContent = useMemo(() => {
+    if (browseMode !== 'explore') return loadedContent
+    const skill = visibleSkills.find((s) => s.id === effectiveSelectedSkillId)
+    if (!skill || skill.sourceKind !== 'explore') return loadedContent
+    const entry = exploreEntries.find(
+      (e) => `${e.registryId}:${e.skillDir}/SKILL.md` === skill.id,
+    )
+    if (!entry) return ''
+    return exploreContentMap.get(entry.path) ?? ''
+  }, [
+    browseMode,
+    loadedContent,
+    exploreEntries,
+    exploreContentMap,
+    effectiveSelectedSkillId,
+    visibleSkills,
+  ])
+
+  useEffect(() => {
+    if (browseMode !== 'explore' || !isTauriRuntime()) return
+    const skill = visibleSkills.find((s) => s.id === effectiveSelectedSkillId)
+    if (!skill || skill.sourceKind !== 'explore') return
+    const entry = exploreEntries.find(
+      (e) => `${e.registryId}:${e.skillDir}/SKILL.md` === skill.id,
+    )
+    if (!entry || exploreContentMap.has(entry.path)) return
+
+    void fetchExploreSkillContent(exploreRegistry, entry.path)
+      .then((raw) => {
+        setExploreContentMap((prev) => {
+          const next = new Map(prev)
+          next.set(entry.path, raw)
+          return next
+        })
+      })
+      .catch((err) => {
+        pushToast('加载失败', err instanceof Error ? err.message : String(err), 'error')
+      })
+  }, [
+    browseMode,
+    effectiveSelectedSkillId,
+    exploreContentMap,
+    exploreEntries,
+    exploreRegistry,
+    pushToast,
+    visibleSkills,
+  ])
 
   const writableSources = sources.filter((source) => source.writable)
 
@@ -709,7 +807,7 @@ function App() {
       <CommandBar
         searchValue={searchValue}
         resultCount={visibleSkills.length}
-        totalCount={skills.length}
+        totalCount={browseMode === 'explore' ? visibleSkills.length : skills.length}
         writableOnly={showWritableOnly}
         onSearchChange={setSearchValue}
         onToggleWritable={() => setShowWritableOnly((current) => !current)}
@@ -758,13 +856,16 @@ function App() {
           onAddCustomSource={handleAddCustomSource}
           onCopySource={setCopyingSource}
           onRemoveSource={handleRemoveSource}
+          onExploreEntriesChange={handleExploreEntriesChange}
+          onExploreError={(msg) => pushToast('探索加载失败', msg, 'error')}
+          exploreRefreshKey={exploreRefreshKey}
         />
 
         {/* Selected skill detail drawer */}
         {selectedSkill ? (
           <SkillPreview
             skill={selectedSkill}
-            rawContent={loadedContent}
+            rawContent={previewRawContent}
             onOpenFolder={(path) => void handleOpenPath(path)}
             onOpenSkill={(path) => void handleOpenPath(path)}
             onCopy={setCopyingSkill}
@@ -773,6 +874,17 @@ function App() {
             onToggleSkillInCollection={handleToggleSkillInCollection}
             onRequestCreateFolder={openCreateFolderFromPreview}
             skillCountBySourceId={skillCountBySourceId}
+            exploreMode={browseMode === 'explore'}
+            onInstall={
+              browseMode === 'explore'
+                ? () => {
+                    const entry = exploreEntries.find(
+                      (e) => `${e.registryId}:${e.skillDir}/SKILL.md` === selectedSkill.id,
+                    )
+                    if (entry) setInstallingEntry(entry)
+                  }
+                : undefined
+            }
           />
         ) : null}
 
@@ -789,24 +901,32 @@ function App() {
             <EmptyState
               className={browseMode === 'collections' ? 'empty-state--folder' : undefined}
               eyebrow={
-                browseMode === 'collections' && !activeCollectionId ? null : undefined
+                browseMode === 'collections' && !activeCollectionId
+                  ? null
+                  : browseMode === 'explore'
+                    ? null
+                    : undefined
               }
               title={
-                browseMode === 'collections' && !activeCollectionId
-                  ? '请选择文件夹'
-                  : browseMode === 'collections' && activeCollectionId
-                    ? '该文件夹暂无 skill'
-                    : '没有匹配的 skills'
+                browseMode === 'explore'
+                  ? '没有匹配的 skills'
+                  : browseMode === 'collections' && !activeCollectionId
+                    ? '请选择文件夹'
+                    : browseMode === 'collections' && activeCollectionId
+                      ? '该文件夹暂无 skill'
+                      : '没有匹配的 skills'
               }
               description={
-                browseMode === 'collections' && !activeCollectionId
-                  ? '在上方选择或新建；来源模式可勾选加入。'
-                  : browseMode === 'collections' && activeCollectionId
-                    ? '在预览勾选加入，或切至来源浏览全部。'
-                    : '尝试开启更多来源、清空搜索或新建 skill。'
+                browseMode === 'explore'
+                  ? '切换分类或清空搜索；若列表为空请检查网络后点击刷新。'
+                  : browseMode === 'collections' && !activeCollectionId
+                    ? '在上方选择或新建；来源模式可勾选加入。'
+                    : browseMode === 'collections' && activeCollectionId
+                      ? '在预览勾选加入，或切至来源浏览全部。'
+                      : '尝试开启更多来源、清空搜索或新建 skill。'
               }
-              actionLabel="新建 skill"
-              onAction={() => setEditorState({ mode: 'create' })}
+              actionLabel={browseMode === 'explore' ? undefined : '新建 skill'}
+              onAction={browseMode === 'explore' ? undefined : () => setEditorState({ mode: 'create' })}
             />
           </div>
         )}
@@ -828,6 +948,21 @@ function App() {
           writableSources={writableSources}
           onCancel={() => setEditorState(null)}
           onSubmit={(payload) => void handleSaveSkill(payload)}
+        />
+      ) : null}
+
+      {installingEntry ? (
+        <InstallDialog
+          key={installingEntry.path}
+          entry={installingEntry}
+          rawContent={exploreContentMap.get(installingEntry.path) ?? ''}
+          writableSources={sources.filter((s) => s.writable && s.enabled)}
+          onSuccess={(label) => {
+            setInstallingEntry(null)
+            pushToast(`已安装到 ${label}`)
+            void refreshSkills(sources)
+          }}
+          onClose={() => setInstallingEntry(null)}
         />
       ) : null}
 

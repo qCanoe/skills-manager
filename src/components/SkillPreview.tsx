@@ -19,6 +19,9 @@ interface SkillPreviewProps {
   onRequestCreateFolder?: () => void
   /** Indexed skill counts per source (used to hide zero-skill sources from path list). */
   skillCountBySourceId: Record<string, number>
+  /** Remote explore tab: hide local file actions, show install. */
+  exploreMode?: boolean
+  onInstall?: () => void
 }
 
 export function SkillPreview({
@@ -32,6 +35,8 @@ export function SkillPreview({
   onToggleSkillInCollection,
   onRequestCreateFolder,
   skillCountBySourceId,
+  exploreMode = false,
+  onInstall,
 }: SkillPreviewProps) {
   const [renderedHtml, setRenderedHtml] = useState('')
   const [htmlReady, setHtmlReady] = useState(false)
@@ -130,6 +135,8 @@ export function SkillPreview({
         </div>
 
         <div className="skill-drawer__actions">
+          {!exploreMode ? (
+            <>
           <button
             className="ghost-button"
             onClick={() => onOpenFolder(skill.skillDir)}
@@ -147,8 +154,10 @@ export function SkillPreview({
             <SquareArrowOutUpRight size={12} />
             SKILL.md
           </button>
+            </>
+          ) : null}
 
-          {onToggleSkillInCollection && onRequestCreateFolder ? (
+          {!exploreMode && onToggleSkillInCollection && onRequestCreateFolder ? (
             <div className="skill-drawer__folder-picker" ref={folderPickerRef}>
               <button
                 type="button"
@@ -203,10 +212,18 @@ export function SkillPreview({
             </div>
           ) : null}
 
+          {!exploreMode ? (
           <button className="ghost-button" onClick={() => onCopy(skill)} type="button">
             <CopyPlus size={12} />
             复制
           </button>
+          ) : null}
+
+          {exploreMode && onInstall ? (
+            <button className="accent-button" type="button" onClick={onInstall}>
+              安装到本地
+            </button>
+          ) : null}
 
         </div>
 
@@ -222,6 +239,8 @@ export function SkillPreview({
                         <span className="skill-drawer__merged-path-text">
                           {p.sourceLabel} · {p.relativePath}
                         </span>
+                        {!exploreMode ? (
+                          <>
                         <button
                           className="ghost-button ghost-button--xs"
                           type="button"
@@ -238,6 +257,8 @@ export function SkillPreview({
                         >
                           <SquareArrowOutUpRight size={11} />
                         </button>
+                          </>
+                        ) : null}
                       </div>
                     ))}
                   </div>

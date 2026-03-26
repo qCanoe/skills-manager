@@ -1,4 +1,4 @@
-export type BrowseMode = 'sources' | 'collections'
+export type BrowseMode = 'sources' | 'collections' | 'explore'
 
 export type SourceKind =
   | 'cursor'
@@ -93,4 +93,23 @@ export interface CopySkillResult {
   finalRelativePath: string
   skipped: boolean
   conflictMessage?: string
+}
+
+/** Remote registry (e.g. anthropics/skills on GitHub). */
+export interface ExploreRegistry {
+  id: string
+  label: string
+  owner: string
+  repo: string
+  branch: string
+  skillsPath: string
+}
+
+/** One skill row from a remote registry (frontend adds registryId after invoke). */
+export interface ExploreEntry {
+  registryId: string
+  path: string
+  skillDir: string
+  name: string
+  category: string
 }

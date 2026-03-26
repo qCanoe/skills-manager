@@ -23,7 +23,9 @@ export function persistActiveSource(sourceId: string) {
 
 export function loadBrowseMode(): BrowseMode {
   const raw = localStorage.getItem(BROWSE_MODE_KEY)
-  return raw === 'collections' ? 'collections' : 'sources'
+  if (raw === 'collections') return 'collections'
+  if (raw === 'explore') return 'explore'
+  return 'sources'
 }
 
 export function persistBrowseMode(mode: BrowseMode) {

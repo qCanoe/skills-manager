@@ -3,6 +3,7 @@ use std::{
   fs,
   path::{Component, Path, PathBuf},
   process::Command,
+  sync::Mutex,
   time::UNIX_EPOCH,
 };
 
@@ -14,6 +15,9 @@ use tauri::{
   AppHandle, Emitter, LogicalPosition, Manager, WindowEvent,
 };
 use walkdir::WalkDir;
+
+mod explore;
+use explore::{explore_clear_cache, explore_fetch_skill, explore_list_skills, ExploreCache};
 
 const MAIN_WINDOW_LABEL: &str = "main";
 const TOGGLE_WINDOW_ID: &str = "toggle-window";
@@ -892,6 +896,7 @@ pub fn run() {
         let _ = window.hide();
       }
     })
+    .manage(Mutex::new(ExploreCache::default()))
     .invoke_handler(tauri::generate_handler![
       get_default_sources,
       scan_skills,
@@ -900,7 +905,10 @@ pub fn run() {
       copy_skill,
       copy_source,
       open_path,
-      write_text_file
+      write_text_file,
+      explore_list_skills,
+      explore_fetch_skill,
+      explore_clear_cache
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

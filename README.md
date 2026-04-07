@@ -15,9 +15,10 @@
 
 ## 功能特性
 
-- **多来源聚合** — 同时扫描 `~/.cursor/skills`、`~/.codex/skills`、`~/.claude/skills`、`~/.agents/skills`、Windsurf、Amp 等目录
+- **多来源聚合** — 同时扫描 `~/.cursor/skills`、`~/.codex/skills`、`~/.claude/skills`、`~/.agents/skills`、Windsurf、Amp 等目录；在「全部来源」视图中，内容相同的 skill 可合并为一条并展示多处路径
+- **探索（Explore）** — 内置若干 GitHub 公共 skill 仓库索引（如 anthropics/skills、obra/superpowers 等），支持按分类浏览、搜索、预览正文；可将远程 skill **安装**到本机**可写**来源（需网络访问 GitHub）
 - **搜索筛选** — 按名称、描述、来源、路径和正文检索；支持仅显示可编辑来源
-- **预览与编辑** — 查看完整 SKILL.md 原文、附件列表；直接新建或编辑 skill
+- **预览与编辑** — 查看完整 SKILL.md 原文、附件列表；直接新建或编辑 skill；编辑时粘贴以 `name:` / `description:` 开头的片段可自动识别元数据
 - **跨来源复制** — 复制单个 skill 或整个来源，支持 rename / overwrite / skip 冲突策略
 - **文件夹（Collections）** — 本机虚拟文件夹，通过引用组织 skill，不复制磁盘文件
 - **自定义来源** — 手动添加目录或使用系统对话框选择；支持导入/导出 JSON 配置
@@ -105,9 +106,9 @@ description: 描述该 skill 的用途
 | 目录 | 职责 |
 | --- | --- |
 | `config/` | Vite / Vitest / ESLint / TypeScript 工程配置（除根级 `tsconfig.json` 解决方案入口） |
-| `src/` | 前端界面、来源管理、搜索筛选、预览与编辑 |
-| `src/lib/` | Skill 元数据解析、来源持久化、UI 状态 |
-| `src-tauri/src/` | 文件扫描、写入、目录复制、托盘与窗口管理 |
+| `src/` | 前端界面、来源管理、搜索筛选、预览与编辑、探索模式 |
+| `src/lib/` | Skill 元数据解析、探索 API 封装、来源持久化、UI 状态 |
+| `src-tauri/src/` | 文件扫描、写入、目录复制、GitHub 探索索引与拉取、托盘与窗口管理 |
 | `public/` | 静态资源（构建时原样复制） |
 | `assets/readme/` | README 截图等文档用资源 |
 | `.cursor/rules/` | Cursor 规则（原 `.cursorrules` 内容迁移至此） |
@@ -125,6 +126,7 @@ description: 描述该 skill 的用途
 - [x] 原生目录选择器
 - [x] 本机文件夹（Collections）
 - [x] 导入 / 导出配置
+- [x] 探索：远程 registry 列表、搜索、预览与安装到本机
 - [ ] Skill 模板库
-- [ ] 热门 skill 推荐
-- [ ] Find Skill 内嵌搜索与安装
+- [ ] 更多探索源 / 自定义 registry
+- [ ] 热门 skill 推荐（Curated 列表或评分）

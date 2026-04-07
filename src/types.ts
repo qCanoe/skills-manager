@@ -52,6 +52,8 @@ export interface SkillRecord extends RawSkillRecord {
   searchIndex: string
   /** Populated only in the "all sources" view when identical skills are merged. */
   mergedPaths?: SkillPathEntry[]
+  /** Category from remote explore registry (e.g. "creative", "development"). */
+  exploreCategory?: string
 }
 
 export interface SaveSkillRequest {
@@ -102,7 +104,13 @@ export interface ExploreRegistry {
   owner: string
   repo: string
   branch: string
+  /** Directory prefix for SKILL.md files (e.g. `skills`). Ignored when `repoRootSkills` is true. */
   skillsPath: string
+  /**
+   * When true, discover SKILL.md anywhere in the repo via recursive glob (任意子目录下的 SKILL.md).
+   * Category = first path segment; name = leaf directory.
+   */
+  repoRootSkills?: boolean
 }
 
 /** One skill row from a remote registry (frontend adds registryId after invoke). */

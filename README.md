@@ -61,6 +61,16 @@ npm run tauri build
 | `npm run lint` | 运行 ESLint |
 | `npm run test` | 运行测试 |
 
+## 安全与权限
+
+> [!NOTE]
+> 以下仅说明本应用如何访问磁盘与网络；不包含 Cursor / Claude 等各工具自身的服务条款。
+
+- **本地文件**：仅处理您在应用中**启用**的各**来源根目录**（默认如 `~/.cursor/skills` 等，以及自定义或经系统对话框添加的路径）。递归查找 `SKILL.md`，并跳过 `.git`；不会对未配置的磁盘路径做后台全盘扫描。
+- **写入**：新建、保存与跨来源复制只会在您主动操作时执行，且目标来源须为可写。
+- **网络**：不向本项目任何服务器上传 skill 内容。使用**探索**时通过 HTTPS 访问 GitHub（仓库目录树与原始 `SKILL.md`）；需公网，并可能受 GitHub API 常规速率限制。
+- **本机状态**：来源列表、Collections、筛选与视图等保存在 WebView `localStorage`，仅驻留本机。托盘与文件夹选择使用系统原生能力。
+
 ## Skill 目录结构
 
 ```text
@@ -126,7 +136,5 @@ description: 描述该 skill 的用途
 - [x] 原生目录选择器
 - [x] 本机文件夹（Collections）
 - [x] 导入 / 导出配置
-- [x] 探索：远程 registry 列表、搜索、预览与安装到本机
-- [ ] Skill 模板库
-- [ ] 更多探索源 / 自定义 registry
-- [ ] 热门 skill 推荐（Curated 列表或评分）
+- [x] 探索：精选Skill库
+- [ ] skill 搜索

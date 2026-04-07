@@ -12,6 +12,7 @@ import { CollectionNameDialog } from './components/CollectionNameDialog'
 import { EmptyState } from './components/EmptyState'
 import { InstallDialog } from './components/InstallDialog'
 import { SkillEditor } from './components/SkillEditor'
+import { ExploreSkillList } from './components/ExploreSkillList'
 import { SkillList } from './components/SkillList'
 import { SkillPreview } from './components/SkillPreview'
 import { SourceManager } from './components/SourceManager'
@@ -35,6 +36,7 @@ import {
   clearExploreCache,
   fetchExploreSkillContent,
   parseExploreSkillContent,
+  type LoadedContent,
 } from './lib/explore'
 import { mergeSkillsByContent, normalizeSkills } from './lib/skills'
 import {
@@ -83,6 +85,13 @@ interface SourceCopyContext {
   sourceLabel: string
   targetLabel: string
 }
+
+interface ExploreContentCacheEntry {
+  raw: string
+  loaded: LoadedContent
+}
+
+const EXPLORE_PREFETCH_LIMIT = 12
 
 type CopyConflictState =
   | {
@@ -138,8 +147,11 @@ function App() {
   const [createFolderFromPreviewOpen, setCreateFolderFromPreviewOpen] = useState(false)
   const [createFolderFromPreviewKey, setCreateFolderFromPreviewKey] = useState(0)
   const [exploreEntries, setExploreEntries] = useState<ExploreEntry[]>([])
+  const [isExploreLoading, setIsExploreLoading] = useState(false)
   const [exploreRegistry, setExploreRegistry] = useState<ExploreRegistry>(BUILT_IN_REGISTRIES[0]!)
-  const [exploreContentMap, setExploreContentMap] = useState<Map<string, string>>(() => new Map())
+  const [exploreContentCache, setExploreContentCache] = useState<Map<string, ExploreContentCacheEntry>>(
+    () => new Map(),
+  )
   const [exploreRefreshKey, setExploreRefreshKey] = useState(0)
   const [installingEntry, setInstallingEntry] = useState<ExploreEntry | null>(null)
   const [isTrayScrolling, setIsTrayScrolling] = useState(false)
@@ -165,6 +177,17 @@ function App() {
 
   const dismissToast = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id))
+  }, [])
+
+  const cacheExploreContent = useCallback((path: string, raw: string) => {
+    const loaded = parseExploreSkillContent(raw)
+    setExploreContentCache((prev) => {
+      const existing = prev.get(path)
+      if (existing?.raw === raw) return prev
+      const next = new Map(prev)
+      next.set(path, { raw, loaded })
+      return next
+    })
   }, [])
 
   const refreshSkills = useCallback(
@@ -207,15 +230,20 @@ function App() {
   const handleExploreEntriesChange = useCallback((entries: ExploreEntry[], registry: ExploreRegistry) => {
     setExploreRegistry(registry)
     setExploreEntries(entries)
-    setSelectedSkillId(undefined)
+    // Don't reset selectedSkillId here; effectiveSelectedSkillId already falls
+    // back to the first visible skill when the current selection disappears.
   }, [])
+
+  const handleExploreError = useCallback((msg: string) => {
+    pushToast('探索加载失败', msg, 'error')
+  }, [pushToast])
 
   const handleToolbarRefresh = useCallback(async () => {
     if (browseMode === 'explore') {
       if (isTauriRuntime()) {
         await clearExploreCache()
       }
-      setExploreContentMap(new Map())
+      setExploreContentCache(new Map())
       setExploreRefreshKey((k) => k + 1)
       pushToast('已重新加载探索索引')
       return
@@ -352,13 +380,20 @@ function App() {
     return m
   }, [skills])
 
+  const exploreEntryBySkillId = useMemo(() => {
+    const map = new Map<string, ExploreEntry>()
+    for (const entry of exploreEntries) {
+      map.set(`${entry.registryId}:${entry.skillDir}/SKILL.md`, entry)
+    }
+    return map
+  }, [exploreEntries])
+
   const visibleSkills = useMemo(() => {
     const term = deferredSearchValue.trim().toLowerCase()
 
     if (browseMode === 'explore') {
       const mapped = exploreEntries.map((entry) => {
-        const raw = exploreContentMap.get(entry.path)
-        const loaded = raw ? parseExploreSkillContent(raw) : undefined
+        const loaded = exploreContentCache.get(entry.path)?.loaded
         return adaptExploreEntryToSkillRecord(entry, exploreRegistry, loaded)
       })
       if (!term) return mapped
@@ -396,7 +431,7 @@ function App() {
     browseMode,
     collectionsState,
     deferredSearchValue,
-    exploreContentMap,
+    exploreContentCache,
     exploreEntries,
     exploreRegistry,
     showWritableOnly,
@@ -477,17 +512,15 @@ function App() {
     if (browseMode !== 'explore') return loadedContent
     const skill = visibleSkills.find((s) => s.id === effectiveSelectedSkillId)
     if (!skill || skill.sourceKind !== 'explore') return loadedContent
-    const entry = exploreEntries.find(
-      (e) => `${e.registryId}:${e.skillDir}/SKILL.md` === skill.id,
-    )
+    const entry = exploreEntryBySkillId.get(skill.id)
     if (!entry) return ''
-    return exploreContentMap.get(entry.path) ?? ''
+    return exploreContentCache.get(entry.path)?.raw ?? ''
   }, [
     browseMode,
     loadedContent,
-    exploreEntries,
-    exploreContentMap,
     effectiveSelectedSkillId,
+    exploreContentCache,
+    exploreEntryBySkillId,
     visibleSkills,
   ])
 
@@ -495,31 +528,64 @@ function App() {
     if (browseMode !== 'explore' || !isTauriRuntime()) return
     const skill = visibleSkills.find((s) => s.id === effectiveSelectedSkillId)
     if (!skill || skill.sourceKind !== 'explore') return
-    const entry = exploreEntries.find(
-      (e) => `${e.registryId}:${e.skillDir}/SKILL.md` === skill.id,
-    )
-    if (!entry || exploreContentMap.has(entry.path)) return
+    const entry = exploreEntryBySkillId.get(skill.id)
+    if (!entry || exploreContentCache.has(entry.path)) return
 
     void fetchExploreSkillContent(exploreRegistry, entry.path)
       .then((raw) => {
-        setExploreContentMap((prev) => {
-          const next = new Map(prev)
-          next.set(entry.path, raw)
-          return next
-        })
+        cacheExploreContent(entry.path, raw)
       })
       .catch((err) => {
         pushToast('加载失败', err instanceof Error ? err.message : String(err), 'error')
       })
   }, [
     browseMode,
+    cacheExploreContent,
     effectiveSelectedSkillId,
-    exploreContentMap,
-    exploreEntries,
+    exploreContentCache,
+    exploreEntryBySkillId,
     exploreRegistry,
     pushToast,
     visibleSkills,
   ])
+
+  // Ref tracks which paths have already been queued for background fetching
+  // so re-renders from content loading don't re-queue the same paths.
+  const batchFetchQueuedRef = useRef(new Set<string>())
+
+  // Reset queued set when explore entries change (registry switch or cache clear).
+  useEffect(() => {
+    batchFetchQueuedRef.current = new Set()
+  }, [exploreEntries, exploreRefreshKey])
+
+  // Pre-fetch descriptions for all currently visible explore skills in the background.
+  // exploreContentMap is intentionally excluded from deps to avoid re-trigger loops;
+  // batchFetchQueuedRef guards against duplicate requests.
+  useEffect(() => {
+    if (browseMode !== 'explore' || !isTauriRuntime()) return
+
+    const toFetch = visibleSkills
+      .filter((skill) => skill.sourceKind === 'explore')
+      .slice(0, EXPLORE_PREFETCH_LIMIT)
+      .map((skill) => exploreEntryBySkillId.get(skill.id))
+      .filter((entry): entry is ExploreEntry => {
+        if (!entry) return false
+        return (
+          !exploreContentCache.has(entry.path) && !batchFetchQueuedRef.current.has(entry.path)
+        )
+      })
+
+    for (const entry of toFetch) {
+      batchFetchQueuedRef.current.add(entry.path)
+      void fetchExploreSkillContent(exploreRegistry, entry.path)
+        .then((raw) => {
+          cacheExploreContent(entry.path, raw)
+        })
+        .catch(() => {
+          // Silently skip background pre-fetch failures; selected-skill fetch shows error.
+        })
+    }
+  }, [browseMode, cacheExploreContent, exploreContentCache, exploreEntryBySkillId, exploreRegistry, visibleSkills])
 
   const writableSources = sources.filter((source) => source.writable)
 
@@ -857,13 +923,15 @@ function App() {
           onCopySource={setCopyingSource}
           onRemoveSource={handleRemoveSource}
           onExploreEntriesChange={handleExploreEntriesChange}
-          onExploreError={(msg) => pushToast('探索加载失败', msg, 'error')}
+          onExploreError={handleExploreError}
+          onExploreLoadingChange={setIsExploreLoading}
           exploreRefreshKey={exploreRefreshKey}
         />
 
         {/* Selected skill detail drawer */}
         {selectedSkill ? (
           <SkillPreview
+            key={`${browseMode}:${selectedSkill.id}`}
             skill={selectedSkill}
             rawContent={previewRawContent}
             onOpenFolder={(path) => void handleOpenPath(path)}
@@ -889,7 +957,25 @@ function App() {
         ) : null}
 
         {/* Skills list */}
-        {visibleSkills.length > 0 ? (
+        {browseMode === 'explore' ? (
+          visibleSkills.length > 0 || isExploreLoading ? (
+            <div className="tray-section">
+              <ExploreSkillList
+                skills={visibleSkills}
+                selectedSkillId={effectiveSelectedSkillId}
+                onSelectSkill={setSelectedSkillId}
+                isSearching={searchValue.trim() !== ''}
+              />
+            </div>
+          ) : (
+            <div className="tray-section">
+              <EmptyState
+                title="没有匹配的 skills"
+                description="切换分类或清空搜索；若列表为空请检查网络后点击刷新。"
+              />
+            </div>
+          )
+        ) : visibleSkills.length > 0 ? (
           <SkillList
             skills={visibleSkills}
             selectedSkillId={effectiveSelectedSkillId}
@@ -900,33 +986,23 @@ function App() {
           <div className="tray-section">
             <EmptyState
               className={browseMode === 'collections' ? 'empty-state--folder' : undefined}
-              eyebrow={
-                browseMode === 'collections' && !activeCollectionId
-                  ? null
-                  : browseMode === 'explore'
-                    ? null
-                    : undefined
-              }
+              eyebrow={browseMode === 'collections' && !activeCollectionId ? null : undefined}
               title={
-                browseMode === 'explore'
-                  ? '没有匹配的 skills'
-                  : browseMode === 'collections' && !activeCollectionId
-                    ? '请选择文件夹'
-                    : browseMode === 'collections' && activeCollectionId
-                      ? '该文件夹暂无 skill'
-                      : '没有匹配的 skills'
+                browseMode === 'collections' && !activeCollectionId
+                  ? '请选择文件夹'
+                  : browseMode === 'collections' && activeCollectionId
+                    ? '该文件夹暂无 skill'
+                    : '没有匹配的 skills'
               }
               description={
-                browseMode === 'explore'
-                  ? '切换分类或清空搜索；若列表为空请检查网络后点击刷新。'
-                  : browseMode === 'collections' && !activeCollectionId
-                    ? '在上方选择或新建；来源模式可勾选加入。'
-                    : browseMode === 'collections' && activeCollectionId
-                      ? '在预览勾选加入，或切至来源浏览全部。'
-                      : '尝试开启更多来源、清空搜索或新建 skill。'
+                browseMode === 'collections' && !activeCollectionId
+                  ? '在上方选择或新建；来源模式可勾选加入。'
+                  : browseMode === 'collections' && activeCollectionId
+                    ? '在预览勾选加入，或切至来源浏览全部。'
+                    : '尝试开启更多来源、清空搜索或新建 skill。'
               }
-              actionLabel={browseMode === 'explore' ? undefined : '新建 skill'}
-              onAction={browseMode === 'explore' ? undefined : () => setEditorState({ mode: 'create' })}
+              actionLabel="新建 skill"
+              onAction={() => setEditorState({ mode: 'create' })}
             />
           </div>
         )}
@@ -955,7 +1031,7 @@ function App() {
         <InstallDialog
           key={installingEntry.path}
           entry={installingEntry}
-          rawContent={exploreContentMap.get(installingEntry.path) ?? ''}
+          rawContent={exploreContentCache.get(installingEntry.path)?.raw ?? ''}
           writableSources={sources.filter((s) => s.writable && s.enabled)}
           onSuccess={(label) => {
             setInstallingEntry(null)

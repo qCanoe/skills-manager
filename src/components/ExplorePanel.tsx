@@ -1,5 +1,5 @@
-import { Compass, LoaderCircle, RotateCcw } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { LoaderCircle, RotateCcw } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { BUILT_IN_REGISTRIES, listExploreSkills } from '../lib/explore'
 import { Select } from './Select'
@@ -10,15 +10,26 @@ interface ExplorePanelProps {
   refreshKey?: number
   onEntriesChange: (entries: ExploreEntry[], registry: ExploreRegistry) => void
   onError: (msg: string) => void
+  onLoadingChange?: (loading: boolean) => void
 }
 
-export function ExplorePanel({ refreshKey = 0, onEntriesChange, onError }: ExplorePanelProps) {
+export function ExplorePanel({ refreshKey = 0, onEntriesChange, onError, onLoadingChange }: ExplorePanelProps) {
   const [registryId, setRegistryId] = useState(BUILT_IN_REGISTRIES[0]!.id)
   const [activeCategory, setActiveCategory] = useState('全部')
   const [allEntries, setAllEntries] = useState<ExploreEntry[]>([])
   const [categories, setCategories] = useState<string[]>([])
-  const [loading, setLoading] = useState(false)
+  /** Start true so the first sync effect does not push [] to parent before fetch runs (avoids title-bar 0/0 flash). */
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    onLoadingChange?.(loading)
+  }, [loading, onLoadingChange])
+
+  // Use a ref so that onError never becomes a loadIndex dependency.
+  // If parent re-creates the callback on every render, loadIndex won't change.
+  const onErrorRef = useRef(onError)
+  useEffect(() => { onErrorRef.current = onError }, [onError])
 
   const registry = useMemo(
     () => BUILT_IN_REGISTRIES.find((r) => r.id === registryId) ?? BUILT_IN_REGISTRIES[0]!,
@@ -28,8 +39,6 @@ export function ExplorePanel({ refreshKey = 0, onEntriesChange, onError }: Explo
   const loadIndex = useCallback(async () => {
     setLoading(true)
     setError(null)
-    setAllEntries([])
-    setCategories([])
     try {
       const entries = await listExploreSkills(registry)
       const cats = Array.from(new Set(entries.map((e) => e.category))).sort()
@@ -39,24 +48,32 @@ export function ExplorePanel({ refreshKey = 0, onEntriesChange, onError }: Explo
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       setError(msg)
-      onError(msg)
+      onErrorRef.current(msg)
     } finally {
       setLoading(false)
     }
-  }, [registry, onError])
+  }, [registry])  // onError intentionally excluded via ref
 
   useEffect(() => {
     void loadIndex()
   }, [loadIndex, refreshKey])
+
+  const handleRegistryChange = useCallback((id: string) => {
+    setLoading(true)
+    setRegistryId(id)
+  }, [])
 
   const filteredEntries = useMemo(() => {
     if (activeCategory === '全部') return allEntries
     return allEntries.filter((e) => e.category === activeCategory)
   }, [allEntries, activeCategory])
 
+  // During fetch, do not notify parent with an empty list — parent may still hold the last good index
+  // (e.g. switching from 来源 → 探索) so the tray title bar does not flash 0/0 or jump.
   useEffect(() => {
+    if (loading) return
     onEntriesChange(filteredEntries, registry)
-  }, [filteredEntries, registry, onEntriesChange])
+  }, [filteredEntries, registry, loading, onEntriesChange])
 
   const registryOptions = BUILT_IN_REGISTRIES.map((r) => ({
     value: r.id,
@@ -65,49 +82,50 @@ export function ExplorePanel({ refreshKey = 0, onEntriesChange, onError }: Explo
 
   return (
     <div className="explore-panel">
-      <div className="explore-panel__registry">
-        <Compass size={14} aria-hidden="true" style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
-        <Select
-          value={registryId}
-          options={registryOptions}
-          onChange={setRegistryId}
-          aria-label="选择注册表"
-        />
-      </div>
-
-      {loading ? (
-        <div className="explore-panel__status" aria-live="polite">
-          <LoaderCircle className="spin" size={14} aria-hidden="true" />
-          <span>正在拉取索引…</span>
+      <div className="explore-toolbar">
+        <div className="explore-toolbar__primary">
+          <Select
+            value={registryId}
+            options={registryOptions}
+            onChange={handleRegistryChange}
+            aria-label="选择注册表"
+          />
         </div>
-      ) : null}
 
-      {error && !loading ? (
-        <div className="explore-panel__error" role="alert">
-          <span className="explore-panel__error-text">{error}</span>
-          <button type="button" className="ghost-button" onClick={() => void loadIndex()}>
-            <RotateCcw size={12} aria-hidden="true" />
-            重试
-          </button>
-        </div>
-      ) : null}
+        {loading ? (
+          <div className="explore-panel__status" aria-live="polite">
+            <LoaderCircle className="spin" size={14} aria-hidden="true" />
+            <span>正在拉取索引…</span>
+          </div>
+        ) : null}
 
-      {!loading && !error && categories.length > 0 ? (
-        <div className="explore-panel__categories" role="tablist" aria-label="技能分类">
-          {['全部', ...categories].map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              role="tab"
-              aria-selected={activeCategory === cat}
-              className={`source-chip explore-panel__cat ${activeCategory === cat ? 'is-active' : ''}`}
-              onClick={() => setActiveCategory(cat)}
-            >
-              {cat}
+        {error && !loading ? (
+          <div className="explore-panel__error" role="alert">
+            <span className="explore-panel__error-text">{error}</span>
+            <button type="button" className="ghost-button" onClick={() => void loadIndex()}>
+              <RotateCcw size={12} aria-hidden="true" />
+              重试
             </button>
-          ))}
-        </div>
-      ) : null}
+          </div>
+        ) : null}
+
+        {!loading && !error && categories.length > 0 ? (
+          <div className="explore-toolbar__categories" role="tablist" aria-label="技能分类">
+            {['全部', ...categories].map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                role="tab"
+                aria-selected={activeCategory === cat}
+                className={`source-chip explore-panel__cat ${activeCategory === cat ? 'is-active' : ''}`}
+                onClick={() => setActiveCategory(cat)}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
 
       {!loading && !error && allEntries.length === 0 ? (
         <p className="explore-panel__empty" aria-live="polite">

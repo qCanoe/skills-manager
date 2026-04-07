@@ -12,6 +12,23 @@ export const BUILT_IN_REGISTRIES: ExploreRegistry[] = [
     branch: 'main',
     skillsPath: 'skills',
   },
+  {
+    id: 'obra-superpowers',
+    label: 'obra/superpowers',
+    owner: 'obra',
+    repo: 'superpowers',
+    branch: 'main',
+    skillsPath: 'skills',
+  },
+  {
+    id: 'garrytan-gstack',
+    label: 'garrytan/gstack',
+    owner: 'garrytan',
+    repo: 'gstack',
+    branch: 'main',
+    skillsPath: '',
+    repoRootSkills: true,
+  },
 ]
 
 /** Payload returned from Rust (no registryId). */
@@ -23,6 +40,7 @@ export async function listExploreSkills(registry: ExploreRegistry): Promise<Expl
     repo: registry.repo,
     branch: registry.branch,
     skillsPath: registry.skillsPath,
+    repoRootSkills: registry.repoRootSkills ?? false,
   })
   return rows.map((row) => ({ ...row, registryId: registry.id }))
 }
@@ -101,5 +119,6 @@ export function adaptExploreEntryToSkillRecord(
     tags: [],
     searchIndex: `${entry.name} ${entry.category}`.toLowerCase(),
     mergedPaths: undefined,
+    exploreCategory: entry.category,
   }
 }

@@ -59,4 +59,20 @@ describe('BUILT_IN_REGISTRIES', () => {
     expect(registry.repo).toBe('skills')
     expect(registry.skillsPath).toBe('skills')
   })
+
+  it('includes obra/superpowers', () => {
+    const sp = BUILT_IN_REGISTRIES.find((r) => r.id === 'obra-superpowers')
+    expect(sp).toBeDefined()
+    expect(sp?.owner).toBe('obra')
+    expect(sp?.repo).toBe('superpowers')
+    expect(sp?.skillsPath).toBe('skills')
+  })
+
+  it('includes garrytan/gstack with repo-root skill layout', () => {
+    const gs = BUILT_IN_REGISTRIES.find((r) => r.id === 'garrytan-gstack')
+    expect(gs).toBeDefined()
+    expect(gs?.owner).toBe('garrytan')
+    expect(gs?.repo).toBe('gstack')
+    expect(gs?.repoRootSkills).toBe(true)
+  })
 })

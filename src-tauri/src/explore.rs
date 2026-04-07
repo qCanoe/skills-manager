@@ -38,26 +38,65 @@ struct GitHubTreeItem {
   item_type: String,
 }
 
-/// Returns Some(ExploreEntry) if path is a valid skill at exactly depth 2
-/// below skills_path (i.e. `{skills_path}/{category}/{name}/SKILL.md`).
-fn parse_skill_path(path: &str, skills_path: &str) -> Option<ExploreEntry> {
+/// Returns Some(ExploreEntry) for `{skills_path}/.../SKILL.md` under the skills root.
+///
+/// Supports both layouts used in the wild:
+/// - **Flat** (e.g. anthropics/skills): `skills/my-skill/SKILL.md` — one folder under `skills/`.
+/// - **Grouped**: `skills/group/my-skill/SKILL.md` — category = first segment, display name = last folder.
+fn parse_skill_under_skills_path(path: &str, skills_path: &str) -> Option<ExploreEntry> {
   let prefix = format!("{skills_path}/");
-  let relative = path.strip_prefix(&prefix)?; // "category/name/SKILL.md"
-  let middle = relative.strip_suffix("/SKILL.md")?; // "category/name"
-  let parts: Vec<&str> = middle.split('/').collect();
-  if parts.len() != 2 {
+  let relative = path.strip_prefix(&prefix)?;
+  let middle = relative.strip_suffix("/SKILL.md")?;
+  if middle.is_empty() {
     return None;
   }
-  let (category, name_raw) = (parts[0], parts[1]);
-  if category.is_empty() || name_raw.is_empty() {
+  let parts: Vec<&str> = middle.split('/').filter(|p| !p.is_empty()).collect();
+  if parts.is_empty() {
+    return None;
+  }
+  let category = parts.first().copied()?.to_string();
+  let name_raw = parts.last().copied()?;
+  if name_raw.is_empty() {
     return None;
   }
   Some(ExploreEntry {
     path: path.to_string(),
-    skill_dir: format!("{skills_path}/{category}/{name_raw}"),
+    skill_dir: format!("{skills_path}/{middle}"),
     name: name_raw.replace('-', " "),
-    category: category.to_string(),
+    category,
   })
+}
+
+/// Repo-root layout (e.g. garrytan/gstack): `browse/SKILL.md`, `openclaw/skills/foo/SKILL.md`.
+/// Category = first path segment; display name = leaf folder. Skips root `SKILL.md` and non-`SKILL.md` blobs.
+fn parse_repo_root_skill_path(path: &str) -> Option<ExploreEntry> {
+  let middle = path.strip_suffix("/SKILL.md")?;
+  if middle.is_empty() {
+    return None;
+  }
+  let parts: Vec<&str> = middle.split('/').filter(|p| !p.is_empty()).collect();
+  if parts.is_empty() {
+    return None;
+  }
+  let category = parts.first().copied()?.to_string();
+  let name_raw = parts.last().copied()?;
+  if name_raw.is_empty() {
+    return None;
+  }
+  Some(ExploreEntry {
+    path: path.to_string(),
+    skill_dir: middle.to_string(),
+    name: name_raw.replace('-', " "),
+    category,
+  })
+}
+
+fn parse_skill_path(path: &str, skills_path: &str, repo_root_skills: bool) -> Option<ExploreEntry> {
+  if repo_root_skills {
+    parse_repo_root_skill_path(path)
+  } else {
+    parse_skill_under_skills_path(path, skills_path)
+  }
 }
 
 #[tauri::command]
@@ -66,6 +105,7 @@ pub fn explore_list_skills(
   repo: String,
   branch: String,
   skills_path: String,
+  repo_root_skills: bool,
   state: State<'_, Mutex<ExploreCache>>,
 ) -> Result<Vec<ExploreEntry>, String> {
   let cache_key = format!("{owner}/{repo}");
@@ -108,7 +148,7 @@ pub fn explore_list_skills(
     .tree
     .iter()
     .filter(|item| item.item_type == "blob")
-    .filter_map(|item| parse_skill_path(&item.path, &skills_path))
+    .filter_map(|item| parse_skill_path(&item.path, &skills_path, repo_root_skills))
     .collect();
 
   {
@@ -189,7 +229,7 @@ mod tests {
   #[test]
   fn parses_valid_skill_path() {
     let item = make_item("skills/creative/art-gen/SKILL.md");
-    let result = parse_skill_path(&item.path, "skills");
+    let result = parse_skill_path(&item.path, "skills", false);
     assert!(result.is_some());
     let entry = result.unwrap();
     assert_eq!(entry.category, "creative");
@@ -201,31 +241,78 @@ mod tests {
   #[test]
   fn skips_too_shallow() {
     let item = make_item("skills/SKILL.md");
-    assert!(parse_skill_path(&item.path, "skills").is_none());
+    assert!(parse_skill_path(&item.path, "skills", false).is_none());
   }
 
   #[test]
-  fn skips_too_deep() {
+  fn parses_nested_three_levels() {
+    // Deeper than group/name is OK: category = first segment, name = leaf folder.
     let item = make_item("skills/creative/art-gen/sub/SKILL.md");
-    assert!(parse_skill_path(&item.path, "skills").is_none());
+    let entry = parse_skill_path(&item.path, "skills", false).unwrap();
+    assert_eq!(entry.category, "creative");
+    assert_eq!(entry.name, "sub");
+    assert_eq!(entry.skill_dir, "skills/creative/art-gen/sub");
+  }
+
+  #[test]
+  fn parses_flat_anthropic_layout() {
+    // anthropics/skills uses skills/<skill-folder>/SKILL.md (single segment under skills/).
+    let item = make_item("skills/algorithmic-art/SKILL.md");
+    let entry = parse_skill_path(&item.path, "skills", false).unwrap();
+    assert_eq!(entry.category, "algorithmic-art");
+    assert_eq!(entry.name, "algorithmic art");
+    assert_eq!(entry.skill_dir, "skills/algorithmic-art");
   }
 
   #[test]
   fn skips_non_skill_files() {
     let item = make_item("skills/creative/art-gen/notes.md");
-    assert!(parse_skill_path(&item.path, "skills").is_none());
+    assert!(parse_skill_path(&item.path, "skills", false).is_none());
   }
 
   #[test]
   fn skips_wrong_prefix() {
     let item = make_item("other/creative/art-gen/SKILL.md");
-    assert!(parse_skill_path(&item.path, "skills").is_none());
+    assert!(parse_skill_path(&item.path, "skills", false).is_none());
   }
 
   #[test]
   fn converts_hyphens_to_spaces_in_name() {
     let item = make_item("skills/dev/my-cool-skill/SKILL.md");
-    let entry = parse_skill_path(&item.path, "skills").unwrap();
+    let entry = parse_skill_path(&item.path, "skills", false).unwrap();
     assert_eq!(entry.name, "my cool skill");
+  }
+
+  #[test]
+  fn parses_repo_root_skill() {
+    let item = make_item("browse/SKILL.md");
+    let entry = parse_skill_path(&item.path, "", true).unwrap();
+    assert_eq!(entry.category, "browse");
+    assert_eq!(entry.name, "browse");
+    assert_eq!(entry.skill_dir, "browse");
+    assert_eq!(entry.path, "browse/SKILL.md");
+  }
+
+  #[test]
+  fn skips_root_level_skill_md_in_repo_root_mode() {
+    let item = make_item("SKILL.md");
+    assert!(parse_skill_path(&item.path, "", true).is_none());
+  }
+
+  #[test]
+  fn parses_nested_repo_root_skill() {
+    let item = make_item("openclaw/skills/gstack-openclaw-retro/SKILL.md");
+    let entry = parse_skill_path(&item.path, "", true).unwrap();
+    assert_eq!(entry.category, "openclaw");
+    assert_eq!(entry.name, "gstack openclaw retro");
+    assert_eq!(entry.skill_dir, "openclaw/skills/gstack-openclaw-retro");
+  }
+
+  #[test]
+  fn repo_root_mode_ignores_skills_prefix_layout() {
+    let item = make_item("skills/algorithmic-art/SKILL.md");
+    let entry = parse_skill_path(&item.path, "skills", true).unwrap();
+    assert_eq!(entry.category, "skills");
+    assert_eq!(entry.name, "algorithmic art");
   }
 }

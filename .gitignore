@@ -44,10 +44,8 @@ src-tauri/target/
 src-tauri/WixTools/
 src-tauri/gen/
 
-# Cursor — local hooks/state only; keep `.cursor/rules` committable if you add it
-.cursor/**
-!.cursor/rules/
-!.cursor/rules/**
+# Cursor — IDE 本地配置与规则，不纳入版本库
+.cursor/
 
 # Agent local memory (e.g. continual-learning); keep machine-specific
 AGENTS.md

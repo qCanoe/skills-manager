@@ -121,7 +121,8 @@ description: 描述该 skill 的用途
 | `src-tauri/src/` | 文件扫描、写入、目录复制、GitHub 探索索引与拉取、托盘与窗口管理 |
 | `public/` | 静态资源（构建时原样复制） |
 | `assets/readme/` | README 截图等文档用资源 |
-| `.cursor/rules/` | Cursor 规则（原 `.cursorrules` 内容迁移至此） |
+
+使用 Cursor 时可在本地自建 `.cursor/`（含 `rules/` 等）；该目录已在 `.gitignore` 中忽略。
 
 ### 版本号同步
 

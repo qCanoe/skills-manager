@@ -1,7 +1,7 @@
-import { useId, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useId, useMemo, useRef, useState, type ClipboardEvent, type FormEvent } from 'react'
 
 import { useModalDialog } from '../hooks/useModalDialog'
-import { buildRelativeSkillPath, buildSkillTemplate } from '../lib/skills'
+import { buildRelativeSkillPath, buildSkillTemplate, parsePastedSkillMetaLines } from '../lib/skills'
 import { Select } from './Select'
 import type { SkillRecord, SourceConfig } from '../types'
 
@@ -62,6 +62,19 @@ export function SkillEditor({
     setRawContent(buildSkillTemplate(nextName || 'new-skill', nextDescription || 'Describe this skill.', nextBody))
   }
 
+  const handlePasteSkillMeta = (event: ClipboardEvent<HTMLTextAreaElement | HTMLInputElement>) => {
+    if (mode !== 'create') return
+    const pasted = event.clipboardData.getData('text/plain')
+    const meta = parsePastedSkillMetaLines(pasted)
+    if (!meta) return
+    event.preventDefault()
+    const nextName = meta.name ?? name
+    const nextDescription = meta.description !== undefined ? meta.description : description
+    setName(nextName)
+    setDescription(nextDescription)
+    updateDraftContent(nextName, nextDescription, body)
+  }
+
   return (
     <div className="modal-backdrop">
       <section ref={panelRef} className="modal-panel" role="dialog" aria-modal="true" aria-labelledby={titleId}>
@@ -90,6 +103,7 @@ export function SkillEditor({
                   id="editor-name"
                   className="field-input"
                   value={name}
+                  onPaste={handlePasteSkillMeta}
                   onChange={(event) => {
                     const nextName = event.target.value
                     setName(nextName)
@@ -106,6 +120,7 @@ export function SkillEditor({
                   className="field-textarea"
                   rows={2}
                   value={description}
+                  onPaste={handlePasteSkillMeta}
                   onChange={(event) => {
                     const nextDescription = event.target.value
                     setDescription(nextDescription)

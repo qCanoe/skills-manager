@@ -32,6 +32,7 @@ interface SourceManagerProps {
   onImportSourcesText?: (json: string) => void | Promise<void>
   onExploreEntriesChange: (entries: ExploreEntry[], registry: ExploreRegistry) => void
   onExploreError: (msg: string) => void
+  onExploreLoadingChange?: (loading: boolean) => void
   exploreRefreshKey?: number
 }
 
@@ -56,6 +57,7 @@ export function SourceManager({
   onRemoveSource,
   onExploreEntriesChange,
   onExploreError,
+  onExploreLoadingChange,
   exploreRefreshKey = 0,
 }: SourceManagerProps) {
   type NameModalState =
@@ -309,6 +311,7 @@ export function SourceManager({
               refreshKey={exploreRefreshKey}
               onEntriesChange={onExploreEntriesChange}
               onError={onExploreError}
+              onLoadingChange={onExploreLoadingChange}
             />
           </div>
         )}

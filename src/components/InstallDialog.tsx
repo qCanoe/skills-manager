@@ -161,7 +161,7 @@ export function InstallDialog({
             value={sourceId}
             options={sourceOptions}
             onChange={setSourceId}
-            aria-label="选择目标来源"
+            menuAriaLabel="选择目标来源"
           />
         </div>
         <div className="modal-actions modal-actions--compact">

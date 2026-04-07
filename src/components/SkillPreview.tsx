@@ -1,7 +1,11 @@
 import { useEffect, useId, useMemo, useRef, useState, useCallback } from 'react'
-import { ChevronDown, CopyPlus, FolderOpen, FolderPlus, SquareArrowOutUpRight } from 'lucide-react'
+import { ChevronDown, CopyPlus, Download, FolderOpen, FolderPlus, SquareArrowOutUpRight } from 'lucide-react'
 
-import { filterPathEntriesBySourceSkillCount, pathEntriesForSkill } from '../lib/skills'
+import {
+  displaySkillDescription,
+  filterPathEntriesBySourceSkillCount,
+  pathEntriesForSkill,
+} from '../lib/skills'
 import { renderMarkdownToSafeHtml } from '../lib/render-markdown'
 import type { SkillCollection } from '../lib/collections'
 import type { SkillPathEntry, SkillRecord } from '../types'
@@ -38,8 +42,10 @@ export function SkillPreview({
   exploreMode = false,
   onInstall,
 }: SkillPreviewProps) {
-  const [renderedHtml, setRenderedHtml] = useState('')
-  const [htmlReady, setHtmlReady] = useState(false)
+  const [renderedMarkdown, setRenderedMarkdown] = useState({ source: '', html: '' })
+  const [isScrolling, setIsScrolling] = useState(false)
+  const [expanded, setExpanded] = useState(true)
+  const [folderPickerOpen, setFolderPickerOpen] = useState(false)
 
   const visiblePathEntries = useMemo(() => {
     if (!skill) return []
@@ -47,18 +53,11 @@ export function SkillPreview({
   }, [skill, skillCountBySourceId])
 
   useEffect(() => {
-    // Reset fade while new markdown is parsed (source changed).
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional UI reset before async sanitize+parse
-    setHtmlReady(false)
-    if (!rawContent) {
-      setRenderedHtml('')
-      return
-    }
+    if (!rawContent) return
     let cancelled = false
     void renderMarkdownToSafeHtml(rawContent).then((html) => {
       if (!cancelled) {
-        setRenderedHtml(html)
-        setHtmlReady(true)
+        setRenderedMarkdown({ source: rawContent, html })
       }
     })
     return () => {
@@ -66,19 +65,13 @@ export function SkillPreview({
     }
   }, [rawContent])
 
-  const [isScrolling, setIsScrolling] = useState(false)
-  const [expanded, setExpanded] = useState(true)
-  const [folderPickerOpen, setFolderPickerOpen] = useState(false)
+  const renderedHtml = renderedMarkdown.source === rawContent ? renderedMarkdown.html : ''
+  const htmlReady = !rawContent || renderedMarkdown.source === rawContent
+
   const folderPickerRef = useRef<HTMLDivElement>(null)
   const folderMenuId = useId()
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const scrollThrottleRef = useRef(0)
-
-  useEffect(() => {
-    // Close folder dropdown when viewing another skill (avoid stale open state).
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional UI reset on skill change
-    setFolderPickerOpen(false)
-  }, [skill?.id])
 
   useEffect(() => {
     if (!folderPickerOpen) return
@@ -109,123 +102,123 @@ export function SkillPreview({
 
   if (!skill) return null
 
+  const descDisplay = displaySkillDescription(skill.description)
+
   return (
     <div className="tray-section">
-      <div key={skill.id} className="skill-drawer skill-drawer--enter">
+      <div className="skill-drawer skill-drawer--enter">
         <div className="skill-drawer__header">
-          <div className="skill-drawer__header-main">
-            <div className="skill-drawer__header-text">
-              <h3 className="skill-drawer__name">{skill.name}</h3>
-              {skill.description ? (
-                <p className="skill-drawer__desc">{skill.description}</p>
+          <div className="skill-drawer__header-grid">
+            <h3 className="skill-drawer__name">{skill.name}</h3>
+            <div className="skill-drawer__header-trailing">
+              {exploreMode && onInstall ? (
+                <button
+                  className="ghost-button skill-drawer__install-inline"
+                  type="button"
+                  onClick={onInstall}
+                  aria-label="安装到本地"
+                >
+                  <Download size={12} aria-hidden />
+                  安装
+                </button>
               ) : null}
+              <button
+                className="skill-drawer__collapse-btn"
+                type="button"
+                onClick={() => setExpanded(o => !o)}
+                aria-label={expanded ? '折叠' : '展开'}
+              >
+                <ChevronDown
+                  size={14}
+                  className={`skill-drawer__collapse-chevron ${expanded ? '' : 'is-collapsed'}`}
+                />
+              </button>
             </div>
-            <button
-              className="skill-drawer__collapse-btn"
-              type="button"
-              onClick={() => setExpanded(o => !o)}
-              aria-label={expanded ? '折叠' : '展开'}
-            >
-              <ChevronDown
-                size={14}
-                className={`skill-drawer__collapse-chevron ${expanded ? '' : 'is-collapsed'}`}
-              />
-            </button>
+            {descDisplay ? <p className="skill-drawer__desc">{descDisplay}</p> : null}
           </div>
         </div>
 
-        <div className="skill-drawer__actions">
-          {!exploreMode ? (
-            <>
-          <button
-            className="ghost-button"
-            onClick={() => onOpenFolder(skill.skillDir)}
-            type="button"
-          >
-            <FolderOpen size={12} />
-            打开文件夹
-          </button>
-
-          <button
-            className="ghost-button"
-            onClick={() => onOpenSkill(skill.skillFile)}
-            type="button"
-          >
-            <SquareArrowOutUpRight size={12} />
-            SKILL.md
-          </button>
-            </>
-          ) : null}
-
-          {!exploreMode && onToggleSkillInCollection && onRequestCreateFolder ? (
-            <div className="skill-drawer__folder-picker" ref={folderPickerRef}>
-              <button
-                type="button"
-                className="ghost-button skill-drawer__folder-trigger"
-                aria-expanded={folderPickerOpen}
-                aria-haspopup="true"
-                aria-controls={folderPickerOpen ? folderMenuId : undefined}
-                onClick={() => setFolderPickerOpen((o) => !o)}
-              >
-                <FolderPlus size={12} />
-                文件夹
-                <ChevronDown
-                  size={14}
-                  className={`skill-drawer__folder-chevron ${folderPickerOpen ? 'is-open' : ''}`}
-                  aria-hidden
-                />
-              </button>
-              {folderPickerOpen ? (
-                <div
-                  id={folderMenuId}
-                  className="skill-drawer__folder-menu"
-                  role="menu"
-                  aria-label="文件夹操作"
-                >
-                  <button
-                    type="button"
-                    className={`skill-drawer__folder-menu-new ${allCollections.length > 0 ? 'has-list-below' : ''}`}
-                    role="menuitem"
-                    onClick={() => {
-                      setFolderPickerOpen(false)
-                      onRequestCreateFolder()
-                    }}
-                  >
-                    <FolderPlus size={12} aria-hidden />
-                    新建
-                  </button>
-                  {allCollections.map((c) => {
-                    const checked = collectionIdsWithSkill.includes(c.id)
-                    return (
-                      <label key={c.id} className="skill-drawer__folder-menu-row">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) => onToggleSkillInCollection(c.id, e.target.checked)}
-                        />
-                        <span className="skill-drawer__folder-menu-name">{c.name}</span>
-                      </label>
-                    )
-                  })}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          {!exploreMode ? (
-          <button className="ghost-button" onClick={() => onCopy(skill)} type="button">
-            <CopyPlus size={12} />
-            复制
-          </button>
-          ) : null}
-
-          {exploreMode && onInstall ? (
-            <button className="accent-button" type="button" onClick={onInstall}>
-              安装到本地
+        {!exploreMode && (
+          <div className="skill-drawer__actions">
+            <button
+              className="ghost-button"
+              onClick={() => onOpenFolder(skill.skillDir)}
+              type="button"
+            >
+              <FolderOpen size={12} />
+              打开文件夹
             </button>
-          ) : null}
 
-        </div>
+            <button
+              className="ghost-button"
+              onClick={() => onOpenSkill(skill.skillFile)}
+              type="button"
+            >
+              <SquareArrowOutUpRight size={12} />
+              SKILL.md
+            </button>
+
+            {onToggleSkillInCollection && onRequestCreateFolder && (
+              <div className="skill-drawer__folder-picker" ref={folderPickerRef}>
+                <button
+                  type="button"
+                  className="ghost-button skill-drawer__folder-trigger"
+                  aria-expanded={folderPickerOpen}
+                  aria-haspopup="true"
+                  aria-controls={folderPickerOpen ? folderMenuId : undefined}
+                  onClick={() => setFolderPickerOpen((o) => !o)}
+                >
+                  <FolderPlus size={12} />
+                  文件夹
+                  <ChevronDown
+                    size={14}
+                    className={`skill-drawer__folder-chevron ${folderPickerOpen ? 'is-open' : ''}`}
+                    aria-hidden
+                  />
+                </button>
+                {folderPickerOpen && (
+                  <div
+                    id={folderMenuId}
+                    className="skill-drawer__folder-menu"
+                    role="menu"
+                    aria-label="文件夹操作"
+                  >
+                    <button
+                      type="button"
+                      className={`skill-drawer__folder-menu-new ${allCollections.length > 0 ? 'has-list-below' : ''}`}
+                      role="menuitem"
+                      onClick={() => {
+                        setFolderPickerOpen(false)
+                        onRequestCreateFolder()
+                      }}
+                    >
+                      <FolderPlus size={12} aria-hidden />
+                      新建
+                    </button>
+                    {allCollections.map((c) => {
+                      const checked = collectionIdsWithSkill.includes(c.id)
+                      return (
+                        <label key={c.id} className="skill-drawer__folder-menu-row">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => onToggleSkillInCollection(c.id, e.target.checked)}
+                          />
+                          <span className="skill-drawer__folder-menu-name">{c.name}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button className="ghost-button" onClick={() => onCopy(skill)} type="button">
+              <CopyPlus size={12} />
+              复制
+            </button>
+          </div>
+        )}
 
         {expanded && (
           <>

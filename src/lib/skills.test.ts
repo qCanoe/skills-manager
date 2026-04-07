@@ -4,6 +4,7 @@ import {
   filterPathEntriesBySourceSkillCount,
   mergeSkillsByContent,
   normalizeSkills,
+  parsePastedSkillMetaLines,
   pathEntriesForSkill,
 } from './skills'
 import type { RawSkillRecord, SkillRecord, SourceConfig } from '../types'
@@ -28,6 +29,51 @@ function rawSkill(relativePath: string, rawExcerpt: string): RawSkillRecord {
     rawExcerpt,
   }
 }
+
+describe('parsePastedSkillMetaLines', () => {
+  it('strips name and description keys and collapses whitespace', () => {
+    const text = `name: adapt
+description: Adapt designs to work across different screen sizes, devices, contexts, or platforms. Ensures consistent experience across varied environments.`
+    expect(parsePastedSkillMetaLines(text)).toEqual({
+      name: 'adapt',
+      description:
+        'Adapt designs to work across different screen sizes, devices, contexts, or platforms. Ensures consistent experience across varied environments.',
+    })
+  })
+
+  it('accepts description-only paste', () => {
+    expect(parsePastedSkillMetaLines('description:  One line.  ')).toEqual({
+      description: 'One line.',
+    })
+  })
+
+  it('joins continued lines until a new top-level key or heading', () => {
+    const text = `name: foo
+description: First line.
+Second line here.
+
+# Doc`
+    expect(parsePastedSkillMetaLines(text)).toEqual({
+      name: 'foo',
+      description: 'First line. Second line here.',
+    })
+  })
+
+  it('parses indented block after empty description value', () => {
+    const text = `name: x
+description:
+  Line one
+  Line two`
+    expect(parsePastedSkillMetaLines(text)).toEqual({
+      name: 'x',
+      description: 'Line one Line two',
+    })
+  })
+
+  it('returns null for plain prose', () => {
+    expect(parsePastedSkillMetaLines('Just some text')).toBeNull()
+  })
+})
 
 describe('normalizeSkills', () => {
   it('parses YAML block literal description (description: |) instead of mistaking | for text', () => {

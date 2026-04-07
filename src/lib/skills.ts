@@ -219,6 +219,13 @@ export function mergeSkillsByContent(skills: SkillRecord[]): SkillRecord[] {
   return result.sort((a, b) => a.name.localeCompare(b.name))
 }
 
+/** Single-line description for compact preview header; hides generic placeholders. */
+export function displaySkillDescription(description: string): string {
+  const normalized = description.replace(/\r/g, '').replace(/\s+/g, ' ').trim()
+  if (!normalized || normalized.toLowerCase() === 'no description') return ''
+  return normalized
+}
+
 /** Primary occurrence + merged alternate paths (for detail / list UI). */
 export function pathEntriesForSkill(skill: SkillRecord): SkillPathEntry[] {
   return [
@@ -287,6 +294,105 @@ export function normalizeSkills(
     })
 
   return dedupeBySourceAndName(skills).sort((left, right) => left.name.localeCompare(right.name))
+}
+
+/** Strips leading `name:` / `description:` lines from pasted skill blurbs and normalizes spacing. */
+export interface PastedSkillMeta {
+  name?: string
+  description?: string
+}
+
+function trimYamlScalar(value: string) {
+  const t = value.trim()
+  if (
+    (t.startsWith('"') && t.endsWith('"')) ||
+    (t.startsWith("'") && t.endsWith("'"))
+  ) {
+    return t.slice(1, -1).trim()
+  }
+  return t
+}
+
+function isTopLevelYamlKeyLine(line: string) {
+  return /^[a-zA-Z_][\w-]*\s*:/.test(line)
+}
+
+function isMarkdownHeadingLine(line: string) {
+  return /^#{1,6}\s/.test(line.trim())
+}
+
+/**
+ * Detects clipboard text that looks like agent-skill frontmatter lines (without `---`) and returns
+ * plain name / description values. Returns `null` if neither key appears at the start of the text.
+ */
+export function parsePastedSkillMetaLines(text: string): PastedSkillMeta | null {
+  const raw = text.replace(/\r/g, '')
+  const lines = raw.split('\n')
+  let i = 0
+  while (i < lines.length && lines[i].trim() === '') i += 1
+  if (i >= lines.length) return null
+
+  const matchKey = (line: string, key: string): string | null => {
+    const m = line.match(/^\s*([a-zA-Z_][\w-]*)\s*:\s*(.*)$/)
+    if (!m || m[1].toLowerCase() !== key) return null
+    return m[2]
+  }
+
+  const out: PastedSkillMeta = {}
+  let matchedAny = false
+
+  const nameRest = matchKey(lines[i], 'name')
+  if (nameRest !== null) {
+    const n = trimYamlScalar(nameRest)
+    if (n) out.name = n
+    matchedAny = true
+    i += 1
+    while (i < lines.length && lines[i].trim() === '') i += 1
+  }
+
+  const descRest = i < lines.length ? matchKey(lines[i], 'description') : null
+  if (descRest !== null) {
+    matchedAny = true
+    const parts: string[] = []
+    const first = trimYamlScalar(descRest)
+
+    if (first === '' && i + 1 < lines.length && /^\s/.test(lines[i + 1]!)) {
+      i += 1
+      while (i < lines.length) {
+        const line = lines[i]!
+        if (line.trim() === '') {
+          i += 1
+          continue
+        }
+        if (!/^\s/.test(line)) break
+        parts.push(line.trim())
+        i += 1
+      }
+    } else {
+      if (first) parts.push(first)
+      i += 1
+      while (i < lines.length) {
+        const line = lines[i]!
+        const t = line.trim()
+        if (t === '') {
+          i += 1
+          continue
+        }
+        if (!/^\s/.test(line) && isTopLevelYamlKeyLine(line)) break
+        if (isMarkdownHeadingLine(line)) break
+        if (/^---+\s*$/.test(t)) break
+        parts.push(t)
+        i += 1
+      }
+    }
+
+    const joined = parts.join(' ').replace(/\s+/g, ' ').trim()
+    if (joined) out.description = joined
+  }
+
+  if (!matchedAny) return null
+  if (!out.name && !out.description) return null
+  return out
 }
 
 export function buildSkillTemplate(name: string, description: string, body: string) {

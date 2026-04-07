@@ -1,5 +1,7 @@
 # Skills Manager
 
+[![Tauri](https://img.shields.io/badge/Tauri-2-24C8D8?logo=tauri&logoColor=white)](https://tauri.app) [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev) [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Rust](https://img.shields.io/badge/Rust-stable-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/) [![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
+
 > 基于 Tauri + React 的轻量Windows桌面托盘应用，集中管理多个 AI Agent 工具的 `SKILL.md` 文件。
 
 支持 Cursor、Codex、Claude Code、Windsurf、Amp 等工具的 skills 目录，统一扫描、浏览、编辑与跨来源复制。

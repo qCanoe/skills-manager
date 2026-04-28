@@ -1,4 +1,14 @@
-export type BrowseMode = 'sources' | 'collections' | 'explore'
+export type BrowseMode = 'sources' | 'collections' | 'explore' | 'recommend'
+
+/** One ranked recommendation row (local or AI). */
+export interface SkillRecommendationMeta {
+  rank: number
+  reason: string
+  whenToUse: string
+  whenNotToUse?: string
+  confidence?: 'high' | 'medium' | 'low'
+  aiGenerated: boolean
+}
 
 export type SourceKind =
   | 'cursor'

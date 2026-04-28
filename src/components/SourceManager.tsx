@@ -1,14 +1,18 @@
-import { ChevronDown, Compass, CopyPlus, Folder, FolderOpen, FolderPlus, Layers, Pencil, Trash2, X } from 'lucide-react'
-import { useId, useState, type FormEvent } from 'react'
+import { ChevronDown, Compass, CopyPlus, Folder, FolderOpen, FolderPlus, Layers, Pencil, Sparkles, Trash2, X } from 'lucide-react'
+import { useEffect, useId, useMemo, useState, type FormEvent } from 'react'
 
 import { CollectionNameDialog } from './CollectionNameDialog'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ExplorePanel } from './ExplorePanel'
+import { RecommendPanel, type RecommendRunPayload } from './RecommendPanel'
 import { FolderSelect } from './FolderSelect'
 import { getSourceBadge } from '../lib/sources'
 import type { ExploreContentLoadResult } from '../lib/explore'
 import type { BrowseMode, ExploreEntry, ExploreRegistry, SourceConfig, SkillRecord } from '../types'
 import type { SkillCollection } from '../lib/collections'
+
+/** 含「全部」在内，单行来源筛选芯片最多个数 */
+const SOURCE_CHIP_ROW_LIMIT = 5
 
 interface SourceManagerProps {
   sources: SourceConfig[]
@@ -39,6 +43,10 @@ interface SourceManagerProps {
   onExploreError: (msg: string) => void
   onExploreLoadingChange?: (loading: boolean) => void
   exploreRefreshKey?: number
+  recommendBusy?: boolean
+  onRecommend?: (payload: RecommendRunPayload) => void | Promise<void>
+  recommendError?: string | null
+  onDismissRecommendError?: () => void
 }
 
 export function SourceManager({
@@ -64,7 +72,41 @@ export function SourceManager({
   onExploreError,
   onExploreLoadingChange,
   exploreRefreshKey = 0,
+  recommendBusy = false,
+  onRecommend,
+  recommendError = null,
+  onDismissRecommendError,
 }: SourceManagerProps) {
+  /**
+   * 除「全部」外至多展示的来源数；条目按 skill 数降序，当前选中若非前若干名则顶替末位以保持可见选中态。
+   */
+  const sourceChipEntries = useMemo(() => {
+    const otherCap = SOURCE_CHIP_ROW_LIMIT - 1
+    const nonzero = sources
+      .map((source) => ({
+        source,
+        count: skills.filter((s) => s.sourceId === source.id).length,
+      }))
+      .filter((x) => x.count > 0)
+    nonzero.sort((a, b) => {
+      const d = b.count - a.count
+      if (d !== 0) return d
+      return a.source.label.localeCompare(b.source.label, undefined, { sensitivity: 'base' })
+    })
+
+    let picked = nonzero.slice(0, otherCap)
+    const active = activeSourceId
+    const activeInPick = active !== 'all' && picked.some((x) => x.source.id === active)
+    if (active !== 'all' && !activeInPick) {
+      const activeRow = nonzero.find((x) => x.source.id === active)
+      if (activeRow) {
+        const others = nonzero.filter((x) => x.source.id !== active)
+        picked = [activeRow, ...others.slice(0, otherCap - 1)]
+      }
+    }
+    return picked
+  }, [sources, skills, activeSourceId])
+
   type NameModalState =
     | { mode: 'create' }
     | { mode: 'rename'; collectionId: string; initialName: string }
@@ -80,6 +122,11 @@ export function SourceManager({
   const [nameModal, setNameModal] = useState<NameModalState | null>(null)
   const [deleteModal, setDeleteModal] = useState<{ id: string; name: string } | null>(null)
   const [collectionNameDialogKey, setCollectionNameDialogKey] = useState(0)
+  /** 首次进入「探索」后保持挂载，避免切走再切回时整块卸载重拉导致闪烁 */
+  const [exploreMountKeepAlive, setExploreMountKeepAlive] = useState(false)
+  useEffect(() => {
+    if (browseMode === 'explore') setExploreMountKeepAlive(true)
+  }, [browseMode])
 
   const pickFolder = async () => {
     if (!desktopFeatures) return
@@ -121,6 +168,71 @@ export function SourceManager({
     <>
     <div className="tray-section">
       <div
+        className="browse-mode-segment tray-section__browse-mode"
+        role="tablist"
+        aria-label="浏览方式"
+        data-active={
+          browseMode === 'sources'
+            ? 'sources'
+            : browseMode === 'collections'
+              ? 'folders'
+              : browseMode === 'explore'
+                ? 'explore'
+                : 'recommend'
+        }
+      >
+        <span className="browse-mode-segment__thumb" aria-hidden="true" />
+        <button
+          type="button"
+          role="tab"
+          id={`${sectionContentId}-tab-sources`}
+          aria-controls={browsePanelId}
+          aria-selected={browseMode === 'sources'}
+          className={`browse-mode-segment__btn ${browseMode === 'sources' ? 'is-active' : ''}`}
+          onClick={() => onBrowseModeChange('sources')}
+        >
+          <Layers size={13} strokeWidth={2} className="browse-mode-segment__icon" aria-hidden />
+          来源
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id={`${sectionContentId}-tab-folders`}
+          aria-controls={browsePanelId}
+          aria-selected={browseMode === 'collections'}
+          className={`browse-mode-segment__btn ${browseMode === 'collections' ? 'is-active' : ''}`}
+          onClick={() => onBrowseModeChange('collections')}
+        >
+          <Folder size={13} strokeWidth={2} className="browse-mode-segment__icon" aria-hidden />
+          文件夹
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id={`${sectionContentId}-tab-explore`}
+          aria-controls={browsePanelId}
+          aria-selected={browseMode === 'explore'}
+          className={`browse-mode-segment__btn ${browseMode === 'explore' ? 'is-active' : ''}`}
+          onClick={() => onBrowseModeChange('explore')}
+        >
+          <Compass size={13} strokeWidth={2} className="browse-mode-segment__icon" aria-hidden />
+          探索
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id={`${sectionContentId}-tab-recommend`}
+          aria-controls={browsePanelId}
+          aria-selected={browseMode === 'recommend'}
+          className={`browse-mode-segment__btn ${browseMode === 'recommend' ? 'is-active' : ''}`}
+          onClick={() => onBrowseModeChange('recommend')}
+        >
+          <Sparkles size={13} strokeWidth={2} className="browse-mode-segment__icon" aria-hidden />
+          推荐
+        </button>
+      </div>
+
+      <div
         className="tray-section-header"
         role="button"
         tabIndex={0}
@@ -134,15 +246,22 @@ export function SourceManager({
             <Folder size={14} style={{ color: 'var(--text-faint)' }} />
           ) : browseMode === 'explore' ? (
             <Compass size={14} style={{ color: 'var(--text-faint)' }} />
+          ) : browseMode === 'recommend' ? (
+            <Sparkles size={14} style={{ color: 'var(--text-faint)' }} />
           ) : (
             <Layers size={14} style={{ color: 'var(--text-faint)' }} />
           )}
           <span className="tray-section-label">
-            {browseMode === 'collections' ? '文件夹' : browseMode === 'explore' ? '探索' : '来源'}
+            {browseMode === 'collections'
+              ? '文件夹'
+              : browseMode === 'explore'
+                ? '探索'
+                : browseMode === 'recommend'
+                  ? '推荐'
+                  : '来源'}
           </span>
         </div>
         <div className="tray-section-header__right">
-          <span className="tray-section-status">{sources.filter((s) => s.enabled).length} 已启用</span>
           <ChevronDown size={14} className={`tray-section-chevron ${collapsed ? 'is-collapsed' : ''}`} />
         </div>
       </div>
@@ -155,53 +274,6 @@ export function SourceManager({
         hidden={collapsed}
       >
         <div
-          className="browse-mode-segment"
-          role="tablist"
-          aria-label="浏览方式"
-          data-active={
-            browseMode === 'sources' ? 'sources' : browseMode === 'collections' ? 'folders' : 'explore'
-          }
-        >
-          <span className="browse-mode-segment__thumb" aria-hidden="true" />
-          <button
-            type="button"
-            role="tab"
-            id={`${sectionContentId}-tab-sources`}
-            aria-controls={browsePanelId}
-            aria-selected={browseMode === 'sources'}
-            className={`browse-mode-segment__btn ${browseMode === 'sources' ? 'is-active' : ''}`}
-            onClick={() => onBrowseModeChange('sources')}
-          >
-            <Layers size={13} strokeWidth={2} className="browse-mode-segment__icon" aria-hidden />
-            来源
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id={`${sectionContentId}-tab-folders`}
-            aria-controls={browsePanelId}
-            aria-selected={browseMode === 'collections'}
-            className={`browse-mode-segment__btn ${browseMode === 'collections' ? 'is-active' : ''}`}
-            onClick={() => onBrowseModeChange('collections')}
-          >
-            <Folder size={13} strokeWidth={2} className="browse-mode-segment__icon" aria-hidden />
-            文件夹
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id={`${sectionContentId}-tab-explore`}
-            aria-controls={browsePanelId}
-            aria-selected={browseMode === 'explore'}
-            className={`browse-mode-segment__btn ${browseMode === 'explore' ? 'is-active' : ''}`}
-            onClick={() => onBrowseModeChange('explore')}
-          >
-            <Compass size={13} strokeWidth={2} className="browse-mode-segment__icon" aria-hidden />
-            探索
-          </button>
-        </div>
-
-        <div
           id={browsePanelId}
           role="tabpanel"
           aria-labelledby={
@@ -209,7 +281,9 @@ export function SourceManager({
               ? `${sectionContentId}-tab-sources`
               : browseMode === 'collections'
                 ? `${sectionContentId}-tab-folders`
-                : `${sectionContentId}-tab-explore`
+                : browseMode === 'explore'
+                  ? `${sectionContentId}-tab-explore`
+                  : `${sectionContentId}-tab-recommend`
           }
           className="browse-panel"
         >
@@ -221,17 +295,11 @@ export function SourceManager({
             onClick={() => onSelectSource('all')}
             type="button"
           >
-            全部
+            <span className="source-chip__label">全部</span>
             <span className="source-chip__count">{allCount}</span>
           </button>
 
-          {sources
-            .map((source) => ({
-              source,
-              count: skills.filter((skill) => skill.sourceId === source.id).length,
-            }))
-            .filter(({ count }) => count > 0)
-            .map(({ source, count }) => (
+          {sourceChipEntries.map(({ source, count }) => (
               <button
                 key={source.id}
                 className={`source-chip ${activeSourceId === source.id ? 'is-active' : ''} ${!source.enabled ? 'is-disabled' : ''}`}
@@ -240,7 +308,7 @@ export function SourceManager({
                 disabled={!source.enabled}
                 aria-disabled={!source.enabled}
               >
-                {source.label}
+                <span className="source-chip__label">{source.label}</span>
                 <span className="source-chip__count">{count}</span>
               </button>
             ))}
@@ -310,8 +378,24 @@ export function SourceManager({
             </div>
           </div>
           </div>
-        ) : (
-          <div key="explore" className="browse-panel__surface">
+        ) : browseMode === 'recommend' ? (
+          <div key="recommend" className="browse-panel__surface">
+            <RecommendPanel
+              sources={sources}
+              busy={recommendBusy}
+              onRecommend={(payload) => void onRecommend?.(payload)}
+              lastError={recommendError}
+              onDismissError={onDismissRecommendError}
+            />
+          </div>
+        ) : null}
+        {exploreMountKeepAlive ? (
+          <div
+            key="explore"
+            className="browse-panel__surface browse-panel__surface--explore-keep-alive"
+            style={{ display: browseMode === 'explore' ? undefined : 'none' }}
+            aria-hidden={browseMode !== 'explore'}
+          >
             <ExplorePanel
               refreshKey={exploreRefreshKey}
               onEntriesChange={onExploreEntriesChange}
@@ -319,7 +403,7 @@ export function SourceManager({
               onLoadingChange={onExploreLoadingChange}
             />
           </div>
-        )}
+        ) : null}
         </div>
 
         {browseMode === 'sources' ? (

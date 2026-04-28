@@ -2,27 +2,23 @@
 
 [Tauri](https://tauri.app) [React](https://react.dev) [TypeScript](https://www.typescriptlang.org/) [Rust](https://www.rust-lang.org/) [Vite](https://vitejs.dev/)
 
-> 基于 Tauri + React 的轻量Windows桌面托盘应用，集中管理多个 AI Agent 工具的 `SKILL.md` 文件。
+> 基于 Tauri + React 的轻量 Windows 桌面托盘应用，集中管理多个 AI Agent 工具的 `SKILL.md` 文件。
 
 支持 Cursor、Codex、Claude Code、Windsurf、Amp 等工具的 skills 目录，统一扫描、浏览、编辑与跨来源复制。
 
-<table>
-  <tr>
-    <td><img src="assets/readme/image1.png" alt="主界面" width="400" /></td>
-    <td><img src="assets/readme/image2.png" alt="复制功能" width="400" /></td>
-  </tr>
-</table>
+
+|     |     |
+| --- | --- |
+|     |     |
+
 
 ## 功能特性
 
-- **多来源聚合** — 同时扫描 `~/.cursor/skills`、`~/.codex/skills`、`~/.claude/skills`、`~/.agents/skills`、Windsurf、Amp 等目录；在「全部来源」视图中，内容相同的 skill 可合并为一条并展示多处路径
-- **探索（Explore）** — 内置若干 GitHub 公共 skill 仓库索引（如 anthropics/skills、obra/superpowers 等），支持按分类浏览、搜索、预览正文；可将远程 skill **安装**到本机**可写**来源（需网络访问 GitHub）
-- **搜索筛选** — 按名称、描述、来源、路径和正文检索；支持仅显示可编辑来源
-- **预览与编辑** — 查看完整 SKILL.md 原文、附件列表；直接新建或编辑 skill；编辑时粘贴以 `name:` / `description:` 开头的片段可自动识别元数据
-- **跨来源复制** — 复制单个 skill 或整个来源，支持 rename / overwrite / skip 冲突策略
-- **文件夹（Collections）** — 本机虚拟文件夹，通过引用组织 skill，不复制磁盘文件
-- **自定义来源** — 手动添加目录或使用系统对话框选择；支持导入/导出 JSON 配置
-- **系统托盘** — 关闭窗口后驻留托盘，支持快速显示/隐藏、重新扫描、退出
+- **多来源与整理** — 聚合 Cursor / Codex / Claude / Agents 等常用 skills 目录与自定义路径；全部来源视图可合并相同内容；全文搜索、Collections、来源配置的导入导出（及推荐用 API，均在右上角设置）
+- **探索** — 内置 GitHub 公共 skill 索引，浏览、预览并安装到本机可写目录（需联网）
+- **按任务推荐** — 「推荐」模式下描述任务，可选扫描范围（已启用来源、单来源或 Cursor 插件缓存）；调用设置中配置的 API 生成推荐Skills排序与简要说明。（填写配置 — 在设置中填写相关的 API 配置）
+- **编辑与复制** — 预览 / 新建 / 编辑 `SKILL.md`；跨来源复制 skill 或整库，支持冲突策略
+- **托盘** — 关窗驻留，快速显示、扫描与退出
 
 ## 快速开始
 
@@ -40,7 +36,7 @@ npm run tauri dev
 ```
 
 > [!IMPORTANT]
-> `npm run dev` 仅启动浏览器预览，文件扫描、保存等功能需通过 `npm run tauri dev` 启动 Tauri 运行时。
+> `npm run dev` 仅启动浏览器预览，文件扫描、保存、推荐（模型 API）等功能需通过 `npm run tauri dev` 启动 Tauri 运行时。
 
 ### 构建
 
@@ -71,7 +67,8 @@ npm run tauri build
 - **本地文件**：仅处理您在应用中**启用**的各**来源根目录**（默认如 `~/.cursor/skills` 等，以及自定义或经系统对话框添加的路径）。递归查找 `SKILL.md`，并跳过 `.git`；不会对未配置的磁盘路径做后台全盘扫描。
 - **写入**：新建、保存与跨来源复制只会在您主动操作时执行，且目标来源须为可写。
 - **网络**：不向本项目任何服务器上传 skill 内容。使用**探索**时通过 HTTPS 访问 GitHub（仓库目录树与原始 `SKILL.md`）；需公网，并可能受 GitHub API 常规速率限制。
-- **本机状态**：来源列表、Collections、筛选与视图等保存在 WebView `localStorage`，仅驻留本机。托盘与文件夹选择使用系统原生能力。
+- **推荐功能与第三方模型 API**：启用推荐时，应用会由 **Rust 后端**向您配置的 **API Base** 发起 HTTPS 请求，请求体中包含：任务描述、候选 skill 的摘要元数据（由本机构建），以及您的 **API Key**（Bearer）。密钥与 Base URL 保存在本机 WebView 的 `localStorage`，不会发往除您填写端点以外的地址；请自行评估服务商条款与数据出境要求。
+- **本机状态**：来源列表、Collections、筛选与视图、推荐 API 配置等保存在 WebView `localStorage`，仅驻留本机。托盘与文件夹选择使用系统原生能力。
 
 ## Skill 目录结构
 
@@ -107,7 +104,7 @@ description: 描述该 skill 的用途
 
 - **前端**：React 19 · TypeScript 5.9 · Vite 8
 - **桌面**：Tauri 2
-- **后端**：Rust 2021
+- **后端**：Rust 2021（含 `reqwest` 阻塞客户端，用于推荐时调用 OpenAI 兼容 API）
 
 ## 开发说明
 
@@ -116,14 +113,15 @@ description: 描述该 skill 的用途
 根目录保留 Vite 约定的 `index.html`、npm 的 `package.json`，以及 TypeScript 的解决方案入口 `tsconfig.json`（通过 `references` 指向 `config/` 内的子配置）。具体工具配置均在 `config/` 目录。
 
 
-| 目录               | 职责                                                                   |
-| ---------------- | -------------------------------------------------------------------- |
-| `config/`        | Vite / Vitest / ESLint / TypeScript 工程配置（除根级 `tsconfig.json` 解决方案入口） |
-| `src/`           | 前端界面、来源管理、搜索筛选、预览与编辑、探索模式                                            |
-| `src/lib/`       | Skill 元数据解析、探索 API 封装、来源持久化、UI 状态                                    |
-| `src-tauri/src/` | 文件扫描、写入、目录复制、GitHub 探索索引与拉取、托盘与窗口管理                                  |
-| `public/`        | 静态资源（构建时原样复制）                                                        |
-| `assets/readme/` | README 截图等文档用资源                                                      |
+| 目录                           | 职责                                                                   |
+| ---------------------------- | -------------------------------------------------------------------- |
+| `config/`                    | Vite / Vitest / ESLint / TypeScript 工程配置（除根级 `tsconfig.json` 解决方案入口） |
+| `src/`                       | 前端界面、来源管理、搜索筛选、预览与编辑、探索模式、推荐面板                                       |
+| `src/lib/`                   | Skill 元数据解析、探索 API 封装、来源持久化、推荐候选构建与合并、UI 状态、AI 推荐配置读存                |
+| `src-tauri/src/`             | 文件扫描、写入、目录复制、GitHub 探索索引与拉取、**推荐库存扫描与模型 API 代理式调用**、托盘与窗口管理          |
+| `src-tauri/src/recommend.rs` | 推荐专用：插件缓存扫描、候选去重、OpenAI 兼容 chat/completions 调用                       |
+| `public/`                    | 静态资源（构建时原样复制）                                                        |
+| `assets/readme/`             | README 截图等文档用资源                                                      |
 
 
 使用 Cursor 时可在本地自建 `.cursor/`（含 `rules/` 等）；该目录已在 `.gitignore` 中忽略。
@@ -132,15 +130,10 @@ description: 描述该 skill 的用途
 
 发布时需同步以下三处版本：`package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`。
 
-### CI
+## Roadmap（后续可能方向）
 
-推送或 PR 时 GitHub Actions 会运行前端 lint / test / build 和 Rust clippy / test。详见 `.github/workflows/ci.yml`。
-
-## Roadmap
-
-- 原生目录选择器
-- 本机文件夹（Collections）
-- 导入 / 导出配置
-- 探索：精选Skill库
-- skill 搜索
+- 推荐模式更多优化联动
+- 探索：更多精选源与离线缓存策略
+- 可访问性与国际化细化
+- UI组件打磨与优化
 

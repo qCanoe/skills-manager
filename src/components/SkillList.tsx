@@ -10,9 +10,17 @@ interface SkillListProps {
   selectedSkillId?: string
   onSelectSkill: (skillId: string) => void
   skillCountBySourceId: Record<string, number>
+  /** One-line reason from「推荐」模式（与列表样式一致）。 */
+  recommendHintBySkillId?: Record<string, string>
 }
 
-export function SkillList({ skills, selectedSkillId, onSelectSkill, skillCountBySourceId }: SkillListProps) {
+export function SkillList({
+  skills,
+  selectedSkillId,
+  onSelectSkill,
+  skillCountBySourceId,
+  recommendHintBySkillId,
+}: SkillListProps) {
   const [collapsed, setCollapsed] = useState(false)
   const listRegionId = useId()
 
@@ -55,6 +63,14 @@ export function SkillList({ skills, selectedSkillId, onSelectSkill, skillCountBy
               <div className="skill-row__name">{skill.name}</div>
               {skill.description ? (
                 <div className="skill-row__desc">{skill.description}</div>
+              ) : null}
+              {recommendHintBySkillId?.[skill.id] ? (
+                <div
+                  className="skill-row__recommend-hint"
+                  title={recommendHintBySkillId[skill.id]}
+                >
+                  {recommendHintBySkillId[skill.id]}
+                </div>
               ) : null}
               <div className="skill-row__meta">
                 {(() => {

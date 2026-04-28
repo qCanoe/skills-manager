@@ -25,6 +25,7 @@ export function loadBrowseMode(): BrowseMode {
   const raw = localStorage.getItem(BROWSE_MODE_KEY)
   if (raw === 'collections') return 'collections'
   if (raw === 'explore') return 'explore'
+  if (raw === 'recommend') return 'recommend'
   return 'sources'
 }
 

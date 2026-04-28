@@ -1,10 +1,10 @@
 import { Download, Filter, Plus, RefreshCw, Search, Settings, Upload, X } from 'lucide-react'
-import { useEffect, useId, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
+import { useEffect, useId, useRef, useState, type ChangeEvent } from 'react'
+
+import { loadAiRecommendSettings, persistAiRecommendSettings, type AiRecommendSettings } from '../lib/ai-settings'
 
 interface CommandBarProps {
   searchValue: string
-  resultCount: number
-  totalCount: number
   writableOnly: boolean
   onSearchChange: (value: string) => void
   onToggleWritable: () => void
@@ -17,8 +17,6 @@ interface CommandBarProps {
 
 export function CommandBar({
   searchValue,
-  resultCount,
-  totalCount,
   writableOnly,
   onSearchChange,
   onToggleWritable,
@@ -31,14 +29,15 @@ export function CommandBar({
   const searchInputRef = useRef<HTMLInputElement>(null)
   const settingsWrapRef = useRef<HTMLDivElement>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
-  const exportMenuItemRef = useRef<HTMLButtonElement>(null)
-  const importMenuItemRef = useRef<HTMLButtonElement>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsMenuId = useId()
   const settingsHintId = useId()
+  const apiFieldsHintId = useId()
   const sourcesIoAvailable = Boolean(
     desktopFeatures && onExportSources && onImportSourcesText,
   )
+  const showSettingsMenu = desktopFeatures
+  const [aiSettings, setAiSettings] = useState<AiRecommendSettings>(loadAiRecommendSettings)
 
   const [refreshBusy, setRefreshBusy] = useState(false)
 
@@ -76,39 +75,15 @@ export function CommandBar({
 
   useEffect(() => {
     if (!settingsOpen) return
-    requestAnimationFrame(() => exportMenuItemRef.current?.focus())
+    setAiSettings(loadAiRecommendSettings())
   }, [settingsOpen])
 
   const triggerImport = () => importInputRef.current?.click()
 
-  const handleSettingsMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'ArrowDown') {
-      event.preventDefault()
-      if (document.activeElement === exportMenuItemRef.current) {
-        importMenuItemRef.current?.focus()
-      } else {
-        exportMenuItemRef.current?.focus()
-      }
-      return
-    }
-    if (event.key === 'ArrowUp') {
-      event.preventDefault()
-      if (document.activeElement === importMenuItemRef.current) {
-        exportMenuItemRef.current?.focus()
-      } else {
-        importMenuItemRef.current?.focus()
-      }
-      return
-    }
-    if (event.key === 'Home') {
-      event.preventDefault()
-      exportMenuItemRef.current?.focus()
-      return
-    }
-    if (event.key === 'End') {
-      event.preventDefault()
-      importMenuItemRef.current?.focus()
-    }
+  const patchAiSettings = (patch: Partial<AiRecommendSettings>) => {
+    const next = { ...aiSettings, ...patch }
+    setAiSettings(next)
+    persistAiRecommendSettings(patch)
   }
 
   const handleImportFile = (event: ChangeEvent<HTMLInputElement>) => {
@@ -129,9 +104,6 @@ export function CommandBar({
       <header className="tray-titlebar">
         <div className="tray-titlebar__left">
           <span className="tray-titlebar__title">All Skills</span>
-          <span className="tray-titlebar__subtitle">
-            {resultCount} / {totalCount}
-          </span>
         </div>
 
         <div className="tray-titlebar__actions">
@@ -167,7 +139,7 @@ export function CommandBar({
             <Plus size={16} />
           </button>
 
-          {sourcesIoAvailable ? (
+          {showSettingsMenu ? (
             <div className="tray-titlebar__settings" ref={settingsWrapRef}>
               <input
                 ref={importInputRef}
@@ -182,9 +154,8 @@ export function CommandBar({
                 type="button"
                 className={`icon-button ${settingsOpen ? 'is-active' : ''}`}
                 aria-expanded={settingsOpen}
-                aria-haspopup="menu"
                 aria-controls={settingsMenuId}
-                aria-label={settingsOpen ? '关闭设置菜单' : '打开设置：导入或导出来源配置'}
+                aria-label={settingsOpen ? '关闭设置' : '打开设置'}
                 data-tooltip="设置"
                 data-tooltip-dir="down"
                 onClick={() => setSettingsOpen((open) => !open)}
@@ -194,48 +165,95 @@ export function CommandBar({
               {settingsOpen ? (
                 <div
                   id={settingsMenuId}
-                  className="settings-menu"
-                  role="menu"
-                  aria-label="来源配置"
+                  className="settings-menu settings-menu--wide"
+                  role="region"
+                  aria-label="设置"
                   aria-describedby={settingsHintId}
-                  onKeyDown={handleSettingsMenuKeyDown}
                 >
-                  <div className="settings-menu__head">
-                    <span className="settings-menu__eyebrow">来源</span>
-                    <p id={settingsHintId} className="settings-menu__hint">
-                      备份或恢复自定义来源与默认来源开关，文件为 JSON。
+                  {sourcesIoAvailable ? (
+                    <>
+                      <div className="settings-menu__head">
+                        <span className="settings-menu__eyebrow">来源</span>
+                        <p id={settingsHintId} className="settings-menu__hint">
+                          一键导出/导入来源目录
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="settings-menu__item"
+                        onClick={() => {
+                          void onExportSources?.()
+                          setSettingsOpen(false)
+                        }}
+                      >
+                        <span className="settings-menu__item-icon" aria-hidden="true">
+                          <Download size={14} strokeWidth={2} />
+                        </span>
+                        <span className="settings-menu__item-label">导出为 JSON…</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="settings-menu__item"
+                        onClick={() => {
+                          setSettingsOpen(false)
+                          triggerImport()
+                        }}
+                      >
+                        <span className="settings-menu__item-icon" aria-hidden="true">
+                          <Upload size={14} strokeWidth={2} />
+                        </span>
+                        <span className="settings-menu__item-label">从 JSON 导入…</span>
+                      </button>
+                    </>
+                  ) : (
+                    <p id={settingsHintId} className="settings-menu__hint settings-menu__hint--solo">
+                      来源导入/导出仅在完整桌面环境中可用。
                     </p>
+                  )}
+
+                  <div
+                    className={`settings-menu__fields${sourcesIoAvailable ? ' settings-menu__fields--divider' : ''}`}
+                    role="group"
+                    aria-describedby={apiFieldsHintId}
+                  >
+                    <p id={apiFieldsHintId} className="settings-menu__hint settings-menu__hint--api">
+                      推荐功能API设置（仅本地可见）
+                    </p>
+                    <label className="settings-menu__field-label" htmlFor={`${settingsMenuId}-api-base`}>
+                      API Base
+                    </label>
+                    <input
+                      id={`${settingsMenuId}-api-base`}
+                      className="field-input settings-menu__field-control"
+                      value={aiSettings.apiBase}
+                      onChange={(e) => patchAiSettings({ apiBase: e.target.value })}
+                      spellCheck={false}
+                      autoComplete="off"
+                    />
+                    <label className="settings-menu__field-label" htmlFor={`${settingsMenuId}-api-key`}>
+                      API Key
+                    </label>
+                    <input
+                      id={`${settingsMenuId}-api-key`}
+                      className="field-input settings-menu__field-control"
+                      type="password"
+                      value={aiSettings.apiKey}
+                      onChange={(e) => patchAiSettings({ apiKey: e.target.value })}
+                      spellCheck={false}
+                      autoComplete="off"
+                    />
+                    <label className="settings-menu__field-label" htmlFor={`${settingsMenuId}-model`}>
+                      模型
+                    </label>
+                    <input
+                      id={`${settingsMenuId}-model`}
+                      className="field-input settings-menu__field-control"
+                      value={aiSettings.model}
+                      onChange={(e) => patchAiSettings({ model: e.target.value })}
+                      spellCheck={false}
+                      autoComplete="off"
+                    />
                   </div>
-                  <button
-                    ref={exportMenuItemRef}
-                    type="button"
-                    className="settings-menu__item"
-                    role="menuitem"
-                    onClick={() => {
-                      void onExportSources?.()
-                      setSettingsOpen(false)
-                    }}
-                  >
-                    <span className="settings-menu__item-icon" aria-hidden="true">
-                      <Download size={14} strokeWidth={2} />
-                    </span>
-                    <span className="settings-menu__item-label">导出为 JSON…</span>
-                  </button>
-                  <button
-                    ref={importMenuItemRef}
-                    type="button"
-                    className="settings-menu__item"
-                    role="menuitem"
-                    onClick={() => {
-                      setSettingsOpen(false)
-                      triggerImport()
-                    }}
-                  >
-                    <span className="settings-menu__item-icon" aria-hidden="true">
-                      <Upload size={14} strokeWidth={2} />
-                    </span>
-                    <span className="settings-menu__item-label">从 JSON 导入…</span>
-                  </button>
                 </div>
               ) : null}
             </div>

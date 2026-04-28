@@ -19,6 +19,8 @@ body,
 #root {
   margin: 0;
   height: 100vh;
+  min-height: 0;
+  min-width: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;

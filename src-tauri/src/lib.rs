@@ -17,7 +17,9 @@ use tauri::{
 use walkdir::WalkDir;
 
 mod explore;
+mod recommend;
 use explore::{explore_clear_cache, explore_fetch_skill, explore_list_skills, ExploreCache};
+use recommend::{read_recommend_project_context, recommend_ai_rerank, scan_recommend_inventory};
 
 const MAIN_WINDOW_LABEL: &str = "main";
 const TOGGLE_WINDOW_ID: &str = "toggle-window";
@@ -97,7 +99,7 @@ struct CopySourceResult {
   conflict_relative_paths: Vec<String>,
 }
 
-fn home_join(parts: &[&str]) -> Result<String, String> {
+pub(crate) fn home_join(parts: &[&str]) -> Result<String, String> {
   let home = home_dir().ok_or_else(|| "无法定位当前用户目录。".to_string())?;
   let mut path = home;
   for part in parts {
@@ -176,68 +178,73 @@ fn get_default_sources() -> Result<Vec<SourceConfig>, String> {
   ])
 }
 
+/// Walk one configured source root and append discovered `SKILL.md` files (same rules as scan).
+pub(crate) fn append_discovered_skills(discovered: &mut Vec<DiscoveredSkill>, source: &SourceConfig) {
+  let root = PathBuf::from(&source.root_path);
+  if !root.exists() || !root.is_dir() {
+    return;
+  }
+
+  for entry in WalkDir::new(&root)
+    .into_iter()
+    .filter_entry(|entry| entry.file_name() != OsStr::new(".git"))
+    .filter_map(Result::ok)
+  {
+    if !entry.file_type().is_file() {
+      continue;
+    }
+
+    if !entry.file_name().to_string_lossy().eq_ignore_ascii_case("SKILL.md") {
+      continue;
+    }
+
+    let skill_file = entry.path().to_path_buf();
+    let Some(skill_dir) = skill_file.parent().map(Path::to_path_buf) else {
+      continue;
+    };
+
+    let Ok(relative) = skill_file.strip_prefix(&root) else {
+      continue;
+    };
+
+    let Ok(raw_content) = fs::read_to_string(&skill_file) else {
+      continue;
+    };
+
+    let extras = collect_extras(&skill_dir);
+    let modified_at_epoch = entry
+      .metadata()
+      .ok()
+      .and_then(|metadata| metadata.modified().ok())
+      .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+      .map(|duration| duration.as_secs());
+
+    discovered.push(DiscoveredSkill {
+      source_id: source.id.clone(),
+      root_path: source.root_path.clone(),
+      skill_dir: skill_dir.to_string_lossy().to_string(),
+      skill_file: skill_file.to_string_lossy().to_string(),
+      relative_path: normalize_relative_path(relative),
+      extras,
+      raw_excerpt: build_raw_excerpt(&raw_content),
+      modified_at_epoch,
+    });
+  }
+}
+
 #[tauri::command]
 fn scan_skills(sources: Vec<SourceConfig>) -> Result<Vec<DiscoveredSkill>, String> {
   let mut discovered = Vec::new();
 
   for source in sources.into_iter().filter(|source| source.enabled) {
-    let root = PathBuf::from(&source.root_path);
-    if !root.exists() || !root.is_dir() {
-      continue;
-    }
-
-    for entry in WalkDir::new(&root)
-      .into_iter()
-      .filter_entry(|entry| entry.file_name() != OsStr::new(".git"))
-      .filter_map(Result::ok)
-    {
-      if !entry.file_type().is_file() {
-        continue;
-      }
-
-      if !entry.file_name().to_string_lossy().eq_ignore_ascii_case("SKILL.md") {
-        continue;
-      }
-
-      let skill_file = entry.path().to_path_buf();
-      let Some(skill_dir) = skill_file.parent().map(Path::to_path_buf) else {
-        continue;
-      };
-
-      let Ok(relative) = skill_file.strip_prefix(&root) else {
-        continue;
-      };
-
-      let Ok(raw_content) = fs::read_to_string(&skill_file) else {
-        continue;
-      };
-
-      let extras = collect_extras(&skill_dir);
-      let modified_at_epoch = entry
-        .metadata()
-        .ok()
-        .and_then(|metadata| metadata.modified().ok())
-        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
-        .map(|duration| duration.as_secs());
-
-      discovered.push(DiscoveredSkill {
-        source_id: source.id.clone(),
-        root_path: source.root_path.clone(),
-        skill_dir: skill_dir.to_string_lossy().to_string(),
-        skill_file: skill_file.to_string_lossy().to_string(),
-        relative_path: normalize_relative_path(relative),
-        extras,
-        raw_excerpt: build_raw_excerpt(&raw_content),
-        modified_at_epoch,
-      });
-    }
+    append_discovered_skills(&mut discovered, &source);
   }
 
   Ok(discovered)
 }
 
 /// Returns frontmatter + first 300 bytes of body to keep IPC payload small.
-fn build_raw_excerpt(raw_content: &str) -> String {
+pub(crate) fn build_raw_excerpt(raw_content: &str) -> String {
   let content = raw_content.replace('\r', "");
 
   let body_start = if let Some(rest) = content.strip_prefix("---\n") {
@@ -482,7 +489,7 @@ fn write_text_file(path: String, contents: String) -> Result<(), String> {
   fs::write(&target, contents).map_err(|err| format!("写入文件失败：{err}"))
 }
 
-fn collect_extras(skill_dir: &Path) -> Vec<String> {
+pub(crate) fn collect_extras(skill_dir: &Path) -> Vec<String> {
   let Ok(entries) = fs::read_dir(skill_dir) else {
     return Vec::new();
   };
@@ -538,7 +545,7 @@ fn ensure_skill_file_path(path: &Path) -> Result<(), String> {
   Ok(())
 }
 
-fn normalize_relative_path(path: &Path) -> String {
+pub(crate) fn normalize_relative_path(path: &Path) -> String {
   path
     .components()
     .map(|component| component.as_os_str().to_string_lossy().to_string())
@@ -908,7 +915,10 @@ pub fn run() {
       write_text_file,
       explore_list_skills,
       explore_fetch_skill,
-      explore_clear_cache
+      explore_clear_cache,
+      scan_recommend_inventory,
+      read_recommend_project_context,
+      recommend_ai_rerank
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

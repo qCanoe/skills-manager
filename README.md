@@ -6,11 +6,12 @@
 
 支持 Cursor、Codex、Claude Code、Windsurf、Amp 等工具的 skills 目录，统一扫描、浏览、编辑与跨来源复制。
 
-
-|     |     |
-| --- | --- |
-|     |     |
-
+<table>
+  <tr>
+    <td><img src="assets/readme/image1.png" alt="主界面" width="400" /></td>
+    <td><img src="assets/readme/image2.png" alt="复制功能" width="400" /></td>
+  </tr>
+</table>
 
 ## 功能特性
 

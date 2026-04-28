@@ -34,8 +34,7 @@ import {
   adaptExploreEntryToSkillRecord,
   BUILT_IN_REGISTRIES,
   clearExploreCache,
-  fetchExploreSkillContent,
-  parseExploreSkillContent,
+  type ExploreContentLoadResult,
   type LoadedContent,
 } from './lib/explore'
 import { mergeSkillsByContent, normalizeSkills } from './lib/skills'
@@ -90,8 +89,6 @@ interface ExploreContentCacheEntry {
   raw: string
   loaded: LoadedContent
 }
-
-const EXPLORE_PREFETCH_LIMIT = 12
 
 type CopyConflictState =
   | {
@@ -155,6 +152,7 @@ function App() {
   const [exploreRefreshKey, setExploreRefreshKey] = useState(0)
   const [installingEntry, setInstallingEntry] = useState<ExploreEntry | null>(null)
   const [isTrayScrolling, setIsTrayScrolling] = useState(false)
+  const exploreRefreshPendingRef = useRef(false)
   const trayHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const trayScrollThrottle = useRef(0)
 
@@ -177,17 +175,6 @@ function App() {
 
   const dismissToast = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id))
-  }, [])
-
-  const cacheExploreContent = useCallback((path: string, raw: string) => {
-    const loaded = parseExploreSkillContent(raw)
-    setExploreContentCache((prev) => {
-      const existing = prev.get(path)
-      if (existing?.raw === raw) return prev
-      const next = new Map(prev)
-      next.set(path, { raw, loaded })
-      return next
-    })
   }, [])
 
   const refreshSkills = useCallback(
@@ -227,14 +214,42 @@ function App() {
     [],
   )
 
-  const handleExploreEntriesChange = useCallback((entries: ExploreEntry[], registry: ExploreRegistry) => {
+  const handleExploreEntriesChange = useCallback((
+    entries: ExploreEntry[],
+    registry: ExploreRegistry,
+    contentResult: ExploreContentLoadResult,
+  ) => {
+    const nextCache = new Map<string, ExploreContentCacheEntry>()
+    for (const [path, raw] of contentResult.rawByPath) {
+      const loaded = contentResult.loadedByPath.get(path)
+      if (loaded) nextCache.set(path, { raw, loaded })
+    }
+
     setExploreRegistry(registry)
+    setExploreContentCache(nextCache)
     setExploreEntries(entries)
+    setStatusLine(`探索已加载 ${contentResult.loadedByPath.size} 个 skills`)
+    if (exploreRefreshPendingRef.current) {
+      exploreRefreshPendingRef.current = false
+      pushToast('探索加载完成', `已加载 ${entries.length} 个 skills`)
+    }
     // Don't reset selectedSkillId here; effectiveSelectedSkillId already falls
     // back to the first visible skill when the current selection disappears.
+  }, [pushToast])
+
+  const handleExploreLoadingChange = useCallback((loading: boolean) => {
+    setIsExploreLoading(loading)
+    if (!loading) return
+
+    setStatusLine('正在加载探索仓库...')
+    setExploreEntries([])
+    setExploreContentCache(new Map())
+    setSelectedSkillId(undefined)
+    setLoadedContent('')
   }, [])
 
   const handleExploreError = useCallback((msg: string) => {
+    exploreRefreshPendingRef.current = false
     pushToast('探索加载失败', msg, 'error')
   }, [pushToast])
 
@@ -244,8 +259,8 @@ function App() {
         await clearExploreCache()
       }
       setExploreContentCache(new Map())
+      exploreRefreshPendingRef.current = true
       setExploreRefreshKey((k) => k + 1)
-      pushToast('已重新加载探索索引')
       return
     }
     const result = await refreshSkills(sources)
@@ -523,69 +538,6 @@ function App() {
     exploreEntryBySkillId,
     visibleSkills,
   ])
-
-  useEffect(() => {
-    if (browseMode !== 'explore' || !isTauriRuntime()) return
-    const skill = visibleSkills.find((s) => s.id === effectiveSelectedSkillId)
-    if (!skill || skill.sourceKind !== 'explore') return
-    const entry = exploreEntryBySkillId.get(skill.id)
-    if (!entry || exploreContentCache.has(entry.path)) return
-
-    void fetchExploreSkillContent(exploreRegistry, entry.path)
-      .then((raw) => {
-        cacheExploreContent(entry.path, raw)
-      })
-      .catch((err) => {
-        pushToast('加载失败', err instanceof Error ? err.message : String(err), 'error')
-      })
-  }, [
-    browseMode,
-    cacheExploreContent,
-    effectiveSelectedSkillId,
-    exploreContentCache,
-    exploreEntryBySkillId,
-    exploreRegistry,
-    pushToast,
-    visibleSkills,
-  ])
-
-  // Ref tracks which paths have already been queued for background fetching
-  // so re-renders from content loading don't re-queue the same paths.
-  const batchFetchQueuedRef = useRef(new Set<string>())
-
-  // Reset queued set when explore entries change (registry switch or cache clear).
-  useEffect(() => {
-    batchFetchQueuedRef.current = new Set()
-  }, [exploreEntries, exploreRefreshKey])
-
-  // Pre-fetch descriptions for all currently visible explore skills in the background.
-  // exploreContentMap is intentionally excluded from deps to avoid re-trigger loops;
-  // batchFetchQueuedRef guards against duplicate requests.
-  useEffect(() => {
-    if (browseMode !== 'explore' || !isTauriRuntime()) return
-
-    const toFetch = visibleSkills
-      .filter((skill) => skill.sourceKind === 'explore')
-      .slice(0, EXPLORE_PREFETCH_LIMIT)
-      .map((skill) => exploreEntryBySkillId.get(skill.id))
-      .filter((entry): entry is ExploreEntry => {
-        if (!entry) return false
-        return (
-          !exploreContentCache.has(entry.path) && !batchFetchQueuedRef.current.has(entry.path)
-        )
-      })
-
-    for (const entry of toFetch) {
-      batchFetchQueuedRef.current.add(entry.path)
-      void fetchExploreSkillContent(exploreRegistry, entry.path)
-        .then((raw) => {
-          cacheExploreContent(entry.path, raw)
-        })
-        .catch(() => {
-          // Silently skip background pre-fetch failures; selected-skill fetch shows error.
-        })
-    }
-  }, [browseMode, cacheExploreContent, exploreContentCache, exploreEntryBySkillId, exploreRegistry, visibleSkills])
 
   const writableSources = sources.filter((source) => source.writable)
 
@@ -924,7 +876,7 @@ function App() {
           onRemoveSource={handleRemoveSource}
           onExploreEntriesChange={handleExploreEntriesChange}
           onExploreError={handleExploreError}
-          onExploreLoadingChange={setIsExploreLoading}
+          onExploreLoadingChange={handleExploreLoadingChange}
           exploreRefreshKey={exploreRefreshKey}
         />
 
@@ -958,7 +910,14 @@ function App() {
 
         {/* Skills list */}
         {browseMode === 'explore' ? (
-          visibleSkills.length > 0 || isExploreLoading ? (
+          isExploreLoading ? (
+            <div className="tray-section">
+              <EmptyState
+                eyebrow={null}
+                title="正在加载探索仓库"
+              />
+            </div>
+          ) : visibleSkills.length > 0 ? (
             <div className="tray-section">
               <ExploreSkillList
                 skills={visibleSkills}

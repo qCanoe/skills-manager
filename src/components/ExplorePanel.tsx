@@ -1,14 +1,19 @@
 import { LoaderCircle, RotateCcw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { BUILT_IN_REGISTRIES, listExploreSkills } from '../lib/explore'
+import { BUILT_IN_REGISTRIES, listExploreSkills, loadExploreSkillContents } from '../lib/explore'
 import { Select } from './Select'
+import type { ExploreContentLoadResult, ExploreContentProgress } from '../lib/explore'
 import type { ExploreEntry, ExploreRegistry } from '../types'
 
 interface ExplorePanelProps {
   /** Increment from parent after `explore_clear_cache` to force re-fetch. */
   refreshKey?: number
-  onEntriesChange: (entries: ExploreEntry[], registry: ExploreRegistry) => void
+  onEntriesChange: (
+    entries: ExploreEntry[],
+    registry: ExploreRegistry,
+    contentResult: ExploreContentLoadResult,
+  ) => void
   onError: (msg: string) => void
   onLoadingChange?: (loading: boolean) => void
 }
@@ -20,7 +25,10 @@ export function ExplorePanel({ refreshKey = 0, onEntriesChange, onError, onLoadi
   const [categories, setCategories] = useState<string[]>([])
   /** Start true so the first sync effect does not push [] to parent before fetch runs (avoids title-bar 0/0 flash). */
   const [loading, setLoading] = useState(true)
+  const [contentProgress, setContentProgress] = useState<ExploreContentProgress | null>(null)
+  const [contentResult, setContentResult] = useState<ExploreContentLoadResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const loadRunRef = useRef(0)
 
   useEffect(() => {
     onLoadingChange?.(loading)
@@ -37,20 +45,35 @@ export function ExplorePanel({ refreshKey = 0, onEntriesChange, onError, onLoadi
   )
 
   const loadIndex = useCallback(async () => {
+    const runId = loadRunRef.current + 1
+    loadRunRef.current = runId
     setLoading(true)
     setError(null)
+    setContentProgress(null)
+    setContentResult(null)
+    setAllEntries([])
+    setCategories([])
     try {
       const entries = await listExploreSkills(registry)
+      if (loadRunRef.current !== runId) return
+      const content = await loadExploreSkillContents(registry, entries, {
+        onProgress: (event) => {
+          if (loadRunRef.current === runId) setContentProgress(event)
+        },
+      })
+      if (loadRunRef.current !== runId) return
       const cats = Array.from(new Set(entries.map((e) => e.category))).sort()
       setAllEntries(entries)
       setCategories(cats)
+      setContentResult(content)
       setActiveCategory('全部')
     } catch (err) {
+      if (loadRunRef.current !== runId) return
       const msg = err instanceof Error ? err.message : String(err)
       setError(msg)
       onErrorRef.current(msg)
     } finally {
-      setLoading(false)
+      if (loadRunRef.current === runId) setLoading(false)
     }
   }, [registry])  // onError intentionally excluded via ref
 
@@ -71,9 +94,9 @@ export function ExplorePanel({ refreshKey = 0, onEntriesChange, onError, onLoadi
   // During fetch, do not notify parent with an empty list — parent may still hold the last good index
   // (e.g. switching from 来源 → 探索) so the tray title bar does not flash 0/0 or jump.
   useEffect(() => {
-    if (loading) return
-    onEntriesChange(filteredEntries, registry)
-  }, [filteredEntries, registry, loading, onEntriesChange])
+    if (loading || !contentResult) return
+    onEntriesChange(filteredEntries, registry, contentResult)
+  }, [filteredEntries, registry, loading, contentResult, onEntriesChange])
 
   const registryOptions = BUILT_IN_REGISTRIES.map((r) => ({
     value: r.id,
@@ -95,7 +118,11 @@ export function ExplorePanel({ refreshKey = 0, onEntriesChange, onError, onLoadi
         {loading ? (
           <div className="explore-panel__status" aria-live="polite">
             <LoaderCircle className="spin" size={14} aria-hidden="true" />
-            <span>正在拉取索引…</span>
+            <span>
+              {contentProgress
+                ? `正在加载 Skill 信息 ${contentProgress.loaded}/${contentProgress.total}…`
+                : '正在拉取索引…'}
+            </span>
           </div>
         ) : null}
 

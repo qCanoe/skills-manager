@@ -1,6 +1,6 @@
 interface EmptyStateProps {
   title: string
-  description: string
+  description?: string
   /** Omit eyebrow line when `null` (e.g. title already states the situation). */
   eyebrow?: string | null
   actionLabel?: string
@@ -21,7 +21,7 @@ export function EmptyState({
     <div className={['empty-state', className].filter(Boolean).join(' ')}>
       {eyebrow != null ? <span className="eyebrow">{eyebrow}</span> : null}
       <h3>{title}</h3>
-      <p>{description}</p>
+      {description ? <p>{description}</p> : null}
       {actionLabel && onAction ? (
         <button className="accent-button" onClick={onAction} type="button">
           {actionLabel}

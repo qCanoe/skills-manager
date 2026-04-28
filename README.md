@@ -1,17 +1,16 @@
 # Skills Manager
 
-[![Tauri](https://img.shields.io/badge/Tauri-2-24C8D8?logo=tauri&logoColor=white)](https://tauri.app) [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev) [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Rust](https://img.shields.io/badge/Rust-stable-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/) [![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
+[Tauri](https://tauri.app) [React](https://react.dev) [TypeScript](https://www.typescriptlang.org/) [Rust](https://www.rust-lang.org/) [Vite](https://vitejs.dev/)
 
 > 基于 Tauri + React 的轻量Windows桌面托盘应用，集中管理多个 AI Agent 工具的 `SKILL.md` 文件。
 
 支持 Cursor、Codex、Claude Code、Windsurf、Amp 等工具的 skills 目录，统一扫描、浏览、编辑与跨来源复制。
 
-<table>
-  <tr>
-    <td><img src="assets/readme/image1.png" alt="主界面" width="400" /></td>
-    <td><img src="assets/readme/image2.png" alt="复制功能" width="400" /></td>
-  </tr>
-</table>
+
+|     |     |
+| --- | --- |
+|     |     |
+
 
 ## 功能特性
 
@@ -52,14 +51,16 @@ npm run tauri build
 
 ### 常用命令
 
-| 命令 | 说明 |
-| --- | --- |
-| `npm run tauri dev` | 启动桌面开发环境 |
-| `npm run tauri build` | 构建并打包桌面应用 |
-| `npm run dev` | 仅启动 Vite 浏览器预览 |
-| `npm run build` | 构建前端资源 |
-| `npm run lint` | 运行 ESLint |
-| `npm run test` | 运行测试 |
+
+| 命令                    | 说明             |
+| --------------------- | -------------- |
+| `npm run tauri dev`   | 启动桌面开发环境       |
+| `npm run tauri build` | 构建并打包桌面应用      |
+| `npm run dev`         | 仅启动 Vite 浏览器预览 |
+| `npm run build`       | 构建前端资源         |
+| `npm run lint`        | 运行 ESLint      |
+| `npm run test`        | 运行测试           |
+
 
 ## 安全与权限
 
@@ -113,14 +114,16 @@ description: 描述该 skill 的用途
 
 根目录保留 Vite 约定的 `index.html`、npm 的 `package.json`，以及 TypeScript 的解决方案入口 `tsconfig.json`（通过 `references` 指向 `config/` 内的子配置）。具体工具配置均在 `config/` 目录。
 
-| 目录 | 职责 |
-| --- | --- |
-| `config/` | Vite / Vitest / ESLint / TypeScript 工程配置（除根级 `tsconfig.json` 解决方案入口） |
-| `src/` | 前端界面、来源管理、搜索筛选、预览与编辑、探索模式 |
-| `src/lib/` | Skill 元数据解析、探索 API 封装、来源持久化、UI 状态 |
-| `src-tauri/src/` | 文件扫描、写入、目录复制、GitHub 探索索引与拉取、托盘与窗口管理 |
-| `public/` | 静态资源（构建时原样复制） |
-| `assets/readme/` | README 截图等文档用资源 |
+
+| 目录               | 职责                                                                   |
+| ---------------- | -------------------------------------------------------------------- |
+| `config/`        | Vite / Vitest / ESLint / TypeScript 工程配置（除根级 `tsconfig.json` 解决方案入口） |
+| `src/`           | 前端界面、来源管理、搜索筛选、预览与编辑、探索模式                                            |
+| `src/lib/`       | Skill 元数据解析、探索 API 封装、来源持久化、UI 状态                                    |
+| `src-tauri/src/` | 文件扫描、写入、目录复制、GitHub 探索索引与拉取、托盘与窗口管理                                  |
+| `public/`        | 静态资源（构建时原样复制）                                                        |
+| `assets/readme/` | README 截图等文档用资源                                                      |
+
 
 使用 Cursor 时可在本地自建 `.cursor/`（含 `rules/` 等）；该目录已在 `.gitignore` 中忽略。
 
@@ -134,8 +137,9 @@ description: 描述该 skill 的用途
 
 ## Roadmap
 
-- [x] 原生目录选择器
-- [x] 本机文件夹（Collections）
-- [x] 导入 / 导出配置
-- [x] 探索：精选Skill库
-- [ ] skill 搜索
+- 原生目录选择器
+- 本机文件夹（Collections）
+- 导入 / 导出配置
+- 探索：精选Skill库
+- skill 搜索
+

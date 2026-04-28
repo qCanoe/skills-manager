@@ -66,6 +66,23 @@ export interface LoadedContent {
   previewBody: string
 }
 
+export interface ExploreContentProgress {
+  loaded: number
+  total: number
+  path: string
+}
+
+export interface ExploreContentLoadResult {
+  rawByPath: Map<string, string>
+  loadedByPath: Map<string, LoadedContent>
+}
+
+interface ExploreContentLoadOptions {
+  concurrency?: number
+  fetchContent?: (registry: ExploreRegistry, path: string) => Promise<string>
+  onProgress?: (event: ExploreContentProgress) => void
+}
+
 /** Parse raw SKILL.md using the same pipeline as local scans. */
 export function parseExploreSkillContent(rawContent: string): LoadedContent {
   const fakeSource: SourceConfig = {
@@ -90,6 +107,38 @@ export function parseExploreSkillContent(rawContent: string): LoadedContent {
     return { description: '', previewBody: rawContent }
   }
   return { description: normalized.description, previewBody: normalized.previewBody }
+}
+
+export async function loadExploreSkillContents(
+  registry: ExploreRegistry,
+  entries: ExploreEntry[],
+  options: ExploreContentLoadOptions = {},
+): Promise<ExploreContentLoadResult> {
+  const total = entries.length
+  const rawByPath = new Map<string, string>()
+  const loadedByPath = new Map<string, LoadedContent>()
+  const fetchContent = options.fetchContent ?? fetchExploreSkillContent
+  const concurrency = Math.max(1, Math.min(options.concurrency ?? 4, total || 1))
+  let nextIndex = 0
+  let loaded = 0
+
+  const worker = async () => {
+    while (nextIndex < entries.length) {
+      const entry = entries[nextIndex]
+      nextIndex += 1
+      if (!entry) continue
+
+      const raw = await fetchContent(registry, entry.path)
+      rawByPath.set(entry.path, raw)
+      loadedByPath.set(entry.path, parseExploreSkillContent(raw))
+      loaded += 1
+      options.onProgress?.({ loaded, total, path: entry.path })
+    }
+  }
+
+  await Promise.all(Array.from({ length: concurrency }, () => worker()))
+
+  return { rawByPath, loadedByPath }
 }
 
 /** Map a remote explore row to a SkillRecord for SkillList / SkillPreview. */

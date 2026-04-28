@@ -185,6 +185,30 @@ describe('mergeSkillsByContent', () => {
     expect(out[0]?.mergedPaths).toHaveLength(1)
   })
 
+  it('merges same-name skills even when copies have drifted in body text', () => {
+    const cursor = stubSkill({
+      id: 'cursor:adapt/SKILL.md',
+      sourceId: 'cursor',
+      sourceLabel: 'Cursor',
+      name: 'adapt',
+      relativePath: 'adapt/SKILL.md',
+      previewBody: 'Adapt existing designs to work effectively across different contexts. MANDATORY PREPARATION',
+    })
+    const codex = stubSkill({
+      id: 'codex:adapt/SKILL.md',
+      sourceId: 'codex',
+      sourceLabel: 'Codex',
+      name: 'adapt',
+      relativePath: 'adapt/SKILL.md',
+      previewBody: 'Adapt existing designs to work effectively across different contexts. Assess Adaptation Challenge',
+    })
+
+    const out = mergeSkillsByContent([cursor, codex])
+
+    expect(out).toHaveLength(1)
+    expect(pathEntriesForSkill(out[0]!)).toHaveLength(2)
+  })
+
   it('prefers writable copy as primary', () => {
     const readonly = stubSkill({ id: 'r:x/SKILL.md', sourceId: 'r', writable: false, relativePath: 'x/SKILL.md' })
     const writable = stubSkill({ id: 'w:x/SKILL.md', sourceId: 'w', writable: true, relativePath: 'y/SKILL.md' })
@@ -202,9 +226,9 @@ describe('mergeSkillsByContent', () => {
     ])
   })
 
-  it('does not merge skills with same name but different content', () => {
+  it('does not merge skills with different names', () => {
     const a = stubSkill({ id: 'a', name: 'foo', previewBody: 'content A' })
-    const b = stubSkill({ id: 'b', name: 'foo', previewBody: 'content B' })
+    const b = stubSkill({ id: 'b', name: 'bar', previewBody: 'content A' })
     expect(mergeSkillsByContent([a, b])).toHaveLength(2)
   })
 })

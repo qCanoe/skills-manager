@@ -170,8 +170,9 @@ function dedupeBySourceAndName(skills: SkillRecord[]): SkillRecord[] {
 }
 
 /**
- * When showing all sources at once, merge skills that share the same name and
- * preview body (i.e. appear to be identical copies across different paths).
+ * When showing all sources at once, merge skills that share the same name.
+ * Skill names are the stable identity across tool-specific copies; the body
+ * may drift slightly between Cursor/Codex/Agents exports.
  * The "primary" copy is chosen by preferring writable > shorter path > alphabetical.
  * Alternate paths are stored in `mergedPaths` on the primary record.
  */
@@ -179,7 +180,7 @@ export function mergeSkillsByContent(skills: SkillRecord[]): SkillRecord[] {
   const groups = new Map<string, SkillRecord[]>()
 
   for (const skill of skills) {
-    const key = `${skill.name.trim().toLowerCase()}::${skill.previewBody}`
+    const key = skill.name.trim().toLowerCase()
     const list = groups.get(key)
     if (list) {
       list.push(skill)

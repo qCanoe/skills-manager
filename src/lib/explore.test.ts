@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { adaptExploreEntryToSkillRecord, BUILT_IN_REGISTRIES } from './explore'
+import { adaptExploreEntryToSkillRecord, BUILT_IN_REGISTRIES, loadExploreSkillContents } from './explore'
 import type { ExploreEntry } from '../types'
 
 const registry = BUILT_IN_REGISTRIES[0]!
@@ -74,5 +74,49 @@ describe('BUILT_IN_REGISTRIES', () => {
     expect(gs?.owner).toBe('garrytan')
     expect(gs?.repo).toBe('gstack')
     expect(gs?.repoRootSkills).toBe(true)
+  })
+})
+
+describe('loadExploreSkillContents', () => {
+  const entries: ExploreEntry[] = [
+    { ...entry, path: 'skills/one/SKILL.md', skillDir: 'skills/one', name: 'one' },
+    { ...entry, path: 'skills/two/SKILL.md', skillDir: 'skills/two', name: 'two' },
+    { ...entry, path: 'skills/three/SKILL.md', skillDir: 'skills/three', name: 'three' },
+  ]
+
+  it('waits for every skill content before resolving', async () => {
+    const progress: Array<{ loaded: number; total: number; path: string }> = []
+
+    const result = await loadExploreSkillContents(registry, entries, {
+      fetchContent: async (_registry, path) => `---\ndescription: ${path}\n---\n\nBody for ${path}`,
+      onProgress: (event) => progress.push(event),
+    })
+
+    expect(result.rawByPath.size).toBe(entries.length)
+    expect(result.loadedByPath.size).toBe(entries.length)
+    expect(result.loadedByPath.get('skills/two/SKILL.md')?.description).toBe('skills/two/SKILL.md')
+    expect(progress).toEqual([
+      { loaded: 1, total: 3, path: 'skills/one/SKILL.md' },
+      { loaded: 2, total: 3, path: 'skills/two/SKILL.md' },
+      { loaded: 3, total: 3, path: 'skills/three/SKILL.md' },
+    ])
+  })
+
+  it('limits concurrent content fetches', async () => {
+    let active = 0
+    let maxActive = 0
+
+    await loadExploreSkillContents(registry, entries, {
+      concurrency: 2,
+      fetchContent: async (_registry, path) => {
+        active += 1
+        maxActive = Math.max(maxActive, active)
+        await Promise.resolve()
+        active -= 1
+        return `---\ndescription: ${path}\n---`
+      },
+    })
+
+    expect(maxActive).toBe(2)
   })
 })

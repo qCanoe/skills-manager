@@ -7,6 +7,7 @@ import {
   pathEntriesForSkill,
 } from '../lib/skills'
 import { renderMarkdownToSafeHtml } from '../lib/render-markdown'
+import { SCROLLBAR_HIDE_DELAY_MS } from '../lib/ui-timing'
 import type { SkillCollection } from '../lib/collections'
 import type { SkillPathEntry, SkillRecord } from '../types'
 
@@ -97,7 +98,7 @@ export function SkillPreview({
       setIsScrolling(true)
     }
     if (hideTimer.current) clearTimeout(hideTimer.current)
-    hideTimer.current = setTimeout(() => setIsScrolling(false), 500)
+    hideTimer.current = setTimeout(() => setIsScrolling(false), SCROLLBAR_HIDE_DELAY_MS)
   }, [])
 
   if (!skill) return null

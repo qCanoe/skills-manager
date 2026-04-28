@@ -50,9 +50,7 @@ export function ExplorePanel({ refreshKey = 0, onEntriesChange, onError, onLoadi
     setLoading(true)
     setError(null)
     setContentProgress(null)
-    setContentResult(null)
-    setAllEntries([])
-    setCategories([])
+    // 不清空条目与 content —— stale-while-revalidate，切换「探索」与其它 tab、或静默再拉索引时卡片不整块消失
     try {
       const entries = await listExploreSkills(registry)
       if (loadRunRef.current !== runId) return

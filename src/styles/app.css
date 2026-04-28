@@ -3,6 +3,7 @@
   position: relative;
   width: 100%;
   height: 100vh;
+  --page-inset: var(--space-md);
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -12,12 +13,18 @@
   font-family: var(--font-body);
 }
 
+@media (max-width: 480px) {
+  .app-shell {
+    --page-inset: var(--space-sm);
+  }
+}
+
 /* ── Top Title Bar ────────────────────────────────────────────── */
 .tray-titlebar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-sm) var(--space-md);
+  padding: var(--space-sm) var(--page-inset);
   background: transparent;
   gap: var(--space-sm);
   flex-shrink: 0;
@@ -33,30 +40,19 @@
   overflow: visible;
 }
 
-/* Wordmark: baseline-aligned with stats — avoids flex center clipping top/bottom of glyphs */
+/* All Skills — headline only (Quicksand; not --font-body) */
 .tray-titlebar__title {
-  font-family: var(--font-wordmark);
+  font-family: "Quicksand", "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   font-size: 1.0625rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-weight: 700;
+  letter-spacing: 0.045em;
   line-height: 1.3;
+  margin-left: 4px;
   padding-block: 0.18em 0.22em;
   color: var(--text);
   white-space: nowrap;
   font-synthesis: none;
   text-rendering: geometricPrecision;
-}
-
-/* Caption stats: secondary run, slightly larger than body-meta for legibility */
-.tray-titlebar__subtitle {
-  font-family: var(--font-wordmark);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  line-height: 1.25;
-  letter-spacing: 0.03em;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-  opacity: 0.92;
 }
 
 .tray-titlebar__actions {
@@ -139,6 +135,61 @@
   color: var(--text-muted);
 }
 
+.settings-menu__hint--solo {
+  padding: 6px 8px 10px;
+}
+
+.settings-menu__hint--api {
+  margin-bottom: 2px;
+}
+
+.settings-menu--wide {
+  min-width: 268px;
+  max-width: min(360px, 94vw);
+  max-height: min(70vh, 440px);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.settings-menu__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 8px 8px;
+}
+
+.settings-menu__fields.settings-menu__fields--divider {
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+  padding-top: 10px;
+}
+
+.settings-menu__field-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.settings-menu__field-control {
+  font-size: 0.78rem;
+  padding: 7px 9px;
+}
+
+.settings-menu__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.settings-menu__check input {
+  accent-color: var(--text);
+}
+
 .settings-menu__item {
   display: flex;
   align-items: center;
@@ -198,7 +249,8 @@
 
 /* ── Search Bar ───────────────────────────────────────────────── */
 .tray-search {
-  padding: 0 var(--space-md) var(--space-sm);
+  min-width: 0;
+  padding: 0 calc(var(--page-inset) + var(--space-2xs)) var(--space-sm) var(--page-inset);
   flex-shrink: 0;
 }
 
@@ -206,7 +258,9 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 0 10px 0 11px;
+  width: 100%;
+  min-width: 0;
+  padding: 0 8px 0 11px;
   height: 34px;
   border-radius: var(--radius-lg);
   background: var(--bg-soft);
@@ -267,8 +321,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   border: none;
   background: var(--bg-strong);
@@ -294,12 +348,15 @@
 /* ── Scrollable Body ──────────────────────────────────────────── */
 .tray-body {
   flex: 1;
+  min-height: 0;
+  min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-gutter: stable; /* always reserves gutter — no layout shift */
+  /* 避免仅在部分模式下出现纵向滚动条时，内容可用宽度抖动（分段控件/列表看似横向伸缩） */
+  scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: transparent transparent; /* track and thumb both invisible */
-  padding: var(--space-2xs) var(--space-md) var(--space-xl);
+  padding: var(--space-xs) var(--page-inset) var(--space-xl);
 }
 
 .tray-body::-webkit-scrollbar {
@@ -351,6 +408,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-3xs);
+  padding-left: 4px;
 }
 
 .tray-section-header__right {
@@ -410,11 +468,18 @@
 }
 
 /* ── Browse mode (来源 / 文件夹) — iOS/macOS 风格分段控件 ─────── */
+.browse-mode-segment.tray-section__browse-mode {
+  position: relative;
+  z-index: 1;
+  margin-bottom: var(--space-xs);
+}
+
 .browse-mode-segment {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   width: 100%;
-  max-width: 320px;
+  max-width: none;
   margin-bottom: var(--space-sm);
   padding: 3px;
   border-radius: 10px;
@@ -428,7 +493,7 @@
   top: 3px;
   left: 3px;
   z-index: 0;
-  width: calc((100% - 6px) / 3);
+  width: calc((100% - 6px) / 4);
   height: calc(100% - 6px);
   border-radius: 8px;
   background: var(--bg-elevated);
@@ -448,19 +513,23 @@
   transform: translateX(200%);
 }
 
+.browse-mode-segment[data-active="recommend"] .browse-mode-segment__thumb {
+  transform: translateX(300%);
+}
+
 .browse-mode-segment__btn {
   position: relative;
   z-index: 1;
   display: inline-flex;
-  flex: 1;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
+  width: 100%;
   min-width: 0;
-  padding: 8px 10px;
+  padding: 7px 5px;
   border: none;
   border-radius: 8px;
-  font-size: 0.74rem;
+  font-size: 0.73rem;
   font-weight: 500;
   letter-spacing: 0.02em;
   background: transparent;
@@ -508,6 +577,124 @@
   .browse-mode-segment__thumb {
     transition: none;
   }
+}
+
+/* Recommend panel */
+.recommend-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-height: 0;
+  min-width: 0;
+}
+
+.recommend-panel__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: 0 0 var(--space-xs);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: opacity 0.18s ease;
+}
+
+.recommend-panel__form[data-busy='true'] {
+  opacity: 0.9;
+}
+
+.recommend-panel__main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(8.5rem, 12rem);
+  gap: var(--space-sm);
+  align-items: end;
+}
+
+.recommend-panel__field,
+.recommend-panel__filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  min-width: 0;
+}
+
+.recommend-panel__prompt {
+  min-height: 58px;
+  resize: vertical;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.recommend-panel__api-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.recommend-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+}
+
+.recommend-panel__submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  min-width: 7.5rem;
+}
+
+@media (max-width: 560px) {
+  .recommend-panel__main {
+    grid-template-columns: 1fr;
+  }
+
+  .recommend-panel__actions {
+    justify-content: stretch;
+  }
+
+  .recommend-panel__submit {
+    justify-content: center;
+    width: 100%;
+  }
+}
+
+.recommend-panel__error-dismiss {
+  color: var(--danger);
+}
+
+.recommend-panel__error-dismiss:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+@media (prefers-color-scheme: dark) {
+  .recommend-panel__form {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recommend-panel__form {
+    transition: none;
+  }
+}
+
+.skill-row__recommend-hint {
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: var(--text-muted);
+  margin-top: 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* Explore panel (remote registry) */
@@ -560,7 +747,8 @@
   padding: 0 4px;
 }
 
-.explore-panel__error {
+.explore-panel__error,
+.recommend-panel__error {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -573,9 +761,11 @@
   color: var(--danger);
 }
 
-.explore-panel__error-text {
+.explore-panel__error-text,
+.recommend-panel__error-text {
   flex: 1;
   min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .explore-toolbar__categories {
@@ -601,18 +791,17 @@
 }
 
 .browse-panel__surface {
-  animation: browse-panel-enter 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* 仅淡入，避免 translate 在切换模式下被感知为整块 UI 抽动/缩放 */
+  animation: browse-panel-enter 140ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes browse-panel-enter {
   from {
     opacity: 0;
-    transform: translateY(3px);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -857,10 +1046,41 @@
 
 /* ── Source Filter Chips ──────────────────────────────────────── */
 .source-chips {
-  display: flex;
-  flex-wrap: wrap;
+  /* 单行等分整行宽度；不设左右 padding，与 tray-body（--page-inset）、分段控件宽度一致 */
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  align-items: stretch;
   gap: var(--space-3xs);
+  width: 100%;
+  max-width: 100%;
   padding: 0 0 var(--space-sm);
+  box-sizing: border-box;
+}
+
+/* SourceManager：芯片铺满网格单元；标签单行以免选中加粗后挤成多行（ExplorePanel 用 .explore-toolbar__categories，不受影响） */
+.source-chips .source-chip {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  justify-content: center;
+  flex-wrap: nowrap;
+  min-height: 1.75rem;
+}
+
+.source-chips .source-chip__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+
+.source-chips .source-chip__count {
+  flex-shrink: 0;
+  margin-left: 0;
 }
 
 .source-chip {
@@ -884,8 +1104,13 @@
 }
 
 .source-chip.is-active {
-  background: var(--text);
-  color: var(--bg);
+  background: var(--bg-active);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.source-chip.is-active .source-chip__count {
+  opacity: 0.5;
 }
 
 .source-chip__count {
@@ -1605,9 +1830,15 @@
   transform: none;
 }
 
+/* Enabled — neutral, slightly stronger than default row controls (no semantic green) */
 .tiny-toggle.is-active {
-  background: var(--text);
-  color: var(--bg);
+  background: var(--bg-strong);
+  color: var(--accent-strong);
+}
+
+.tiny-toggle.is-active:hover {
+  background: var(--bg-active);
+  color: var(--accent-strong);
 }
 
 .tiny-toggle--danger {
@@ -1679,15 +1910,26 @@
   color: var(--text);
   font-size: 0.85rem;
   outline: none;
-  transition: all 150ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  box-shadow: none;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.field-input:hover,
+.field-select:hover,
+.field-textarea:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
 }
 
 .field-input:focus,
 .field-select:focus,
 .field-textarea:focus {
-  border-color: var(--border-accent);
-  background: var(--bg-strong);
-  box-shadow: 0 0 0 2px var(--accent-selected);
+  background: var(--bg-soft);
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 2.5px var(--border);
 }
 
 .field-input::placeholder,
@@ -2365,6 +2607,17 @@
   overflow-wrap: break-word;
 }
 
+.empty-state--recommend {
+  padding-top: var(--space-xl);
+  padding-bottom: var(--space-2xl);
+}
+
+.empty-state--recommend p {
+  max-width: 18rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 /* ── Spin ─────────────────────────────────────────────────────── */
 .spin {
   animation: spin 1s linear infinite;
@@ -2382,6 +2635,12 @@ select:focus-visible,
 button:focus-visible {
   outline: 2px solid var(--text);
   outline-offset: 2px;
+}
+
+.field-input:focus-visible,
+.field-textarea:focus-visible,
+.field-select:focus-visible {
+  outline: none;
 }
 
 .search-field input:focus-visible {

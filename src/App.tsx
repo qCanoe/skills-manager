@@ -15,6 +15,7 @@ import { SkillEditor } from './components/SkillEditor'
 import { ExploreSkillList } from './components/ExploreSkillList'
 import { SkillList } from './components/SkillList'
 import { SkillPreview } from './components/SkillPreview'
+import type { RecommendRunPayload } from './components/RecommendPanel'
 import { SourceManager } from './components/SourceManager'
 import { ToastContainer, type ToastMessage } from './components/Toast'
 import {
@@ -37,6 +38,15 @@ import {
   type ExploreContentLoadResult,
   type LoadedContent,
 } from './lib/explore'
+import { isAiRecommendConfigured, loadAiRecommendSettings } from './lib/ai-settings'
+import {
+  buildRecommendCandidatePayload,
+  buildRecommendScanScope,
+  mergeAiRecommendations,
+  mergeSourcesForRecommend,
+  rankRecommendCandidates,
+  type AiRerankResponse,
+} from './lib/recommend'
 import { mergeSkillsByContent, normalizeSkills } from './lib/skills'
 import {
   buildSourcesExport,
@@ -59,6 +69,7 @@ import {
   persistBrowseMode,
   persistWritableOnly,
 } from './lib/ui-state'
+import { SCROLLBAR_HIDE_DELAY_MS } from './lib/ui-timing'
 import type {
   CopyConflictStrategy,
   CopySkillRequest,
@@ -68,6 +79,7 @@ import type {
   ExploreEntry,
   ExploreRegistry,
   RawSkillRecord,
+  SkillRecommendationMeta,
   SkillRecord,
   SourceConfig,
 } from './types'
@@ -151,6 +163,10 @@ function App() {
   )
   const [exploreRefreshKey, setExploreRefreshKey] = useState(0)
   const [installingEntry, setInstallingEntry] = useState<ExploreEntry | null>(null)
+  const [recommendList, setRecommendList] = useState<SkillRecord[]>([])
+  const [recommendMetaById, setRecommendMetaById] = useState<Record<string, SkillRecommendationMeta>>({})
+  const [recommendBusy, setRecommendBusy] = useState(false)
+  const [recommendPanelError, setRecommendPanelError] = useState<string | null>(null)
   const [isTrayScrolling, setIsTrayScrolling] = useState(false)
   const exploreRefreshPendingRef = useRef(false)
   const trayHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -163,7 +179,7 @@ function App() {
       setIsTrayScrolling(true)
     }
     if (trayHideTimer.current) clearTimeout(trayHideTimer.current)
-    trayHideTimer.current = setTimeout(() => setIsTrayScrolling(false), 500)
+    trayHideTimer.current = setTimeout(() => setIsTrayScrolling(false), SCROLLBAR_HIDE_DELAY_MS)
   }, [])
 
   const pushToast = useCallback(
@@ -239,13 +255,9 @@ function App() {
 
   const handleExploreLoadingChange = useCallback((loading: boolean) => {
     setIsExploreLoading(loading)
-    if (!loading) return
-
-    setStatusLine('正在加载探索仓库...')
-    setExploreEntries([])
-    setExploreContentCache(new Map())
-    setSelectedSkillId(undefined)
-    setLoadedContent('')
+    // 不在此处清空 explore 列表或缓存 —— 否则会切回本 tab / 面板重挂载时整表闪烁；
+    // 仍以 handleExploreEntriesChange 在无 loading 时用新结果覆盖；显式刷新在 handleToolbarRefresh 里清空后再拉取。
+    if (loading) setStatusLine('正在加载探索仓库…')
   }, [])
 
   const handleExploreError = useCallback((msg: string) => {
@@ -254,6 +266,18 @@ function App() {
   }, [pushToast])
 
   const handleToolbarRefresh = useCallback(async () => {
+    if (browseMode === 'recommend') {
+      setRecommendList([])
+      setRecommendMetaById({})
+      setSelectedSkillId(undefined)
+      const result = await refreshSkills(sources)
+      if (result.ok) {
+        pushToast('扫描完成', '推荐结果已清空')
+      } else {
+        pushToast('扫描失败', '请查看上方错误说明', 'error')
+      }
+      return
+    }
     if (browseMode === 'explore') {
       if (isTauriRuntime()) {
         await clearExploreCache()
@@ -270,6 +294,84 @@ function App() {
       pushToast('扫描失败', '请查看上方错误说明', 'error')
     }
   }, [browseMode, pushToast, refreshSkills, sources])
+
+  const runRecommend = useCallback(
+    async (payload: RecommendRunPayload) => {
+      if (!isTauriRuntime()) {
+        const msg = '请在桌面应用中打开后再使用推荐。'
+        setRecommendPanelError(msg)
+        pushToast('推荐', '请在桌面端使用推荐。', 'error')
+        return
+      }
+      setRecommendBusy(true)
+      setErrorMessage(null)
+      setRecommendPanelError(null)
+      const aiSettings = loadAiRecommendSettings()
+      if (!isAiRecommendConfigured(aiSettings)) {
+        const msg = '请先在右上角设置中填写 API Base、API Key 与模型。'
+        setRecommendPanelError(msg)
+        pushToast('尚未配置 API', '请在设置中填写 API Base、API Key 与模型后再使用推荐。', 'error')
+        setStatusLine('推荐需先配置模型 API。')
+        setRecommendBusy(false)
+        return
+      }
+      setStatusLine('正在扫描技能…')
+      try {
+        const scanScope = buildRecommendScanScope(sources, payload.scopeId)
+        const raw = await invoke<RawSkillRecord[]>('scan_recommend_inventory', {
+          request: {
+            sources: scanScope.sources,
+            includePluginCache: scanScope.includePluginCache,
+            workspaceRoot: null,
+          },
+        })
+        const mergedSources = mergeSourcesForRecommend(scanScope.sources)
+        const normalized = normalizeSkills(raw, mergedSources)
+        setStatusLine(`候选 ${normalized.length} 个，匹配中…`)
+
+        const projectContext = ''
+        const candidates = rankRecommendCandidates(normalized, payload.prompt, projectContext, 30)
+
+        setStatusLine('模型排序中…')
+        let aiResponse: AiRerankResponse
+        try {
+          aiResponse = await invoke<AiRerankResponse>('recommend_ai_rerank', {
+            request: {
+              apiBase: aiSettings.apiBase.trim(),
+              apiKey: aiSettings.apiKey.trim(),
+              model: aiSettings.model.trim(),
+              userPrompt: payload.prompt,
+              projectContext,
+              candidatesJson: JSON.stringify(buildRecommendCandidatePayload(candidates)),
+            },
+          })
+        } catch (err) {
+          const detail = err instanceof Error ? err.message : String(err)
+          setRecommendPanelError(detail)
+          pushToast('模型 API 调用失败', detail, 'error')
+          setStatusLine('推荐失败。')
+          return
+        }
+
+        const { ordered, metaBySkillId } = mergeAiRecommendations(candidates, aiResponse)
+        setRecommendList(ordered)
+        setRecommendMetaById(metaBySkillId)
+        setSelectedSkillId(ordered[0]?.id)
+        setRecommendPanelError(null)
+        setStatusLine(`推荐完成 · ${ordered.length} 个`)
+        pushToast('推荐完成', `已选出 ${ordered.length} 个`)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        setErrorMessage(msg)
+        setRecommendPanelError(msg)
+        setStatusLine('推荐失败。')
+        pushToast('推荐失败', msg, 'error')
+      } finally {
+        setRecommendBusy(false)
+      }
+    },
+    [pushToast, sources],
+  )
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -406,6 +508,12 @@ function App() {
   const visibleSkills = useMemo(() => {
     const term = deferredSearchValue.trim().toLowerCase()
 
+    if (browseMode === 'recommend') {
+      let list = recommendList
+      if (term) list = list.filter((s) => s.searchIndex.includes(term))
+      return list
+    }
+
     if (browseMode === 'explore') {
       const mapped = exploreEntries.map((entry) => {
         const loaded = exploreContentCache.get(entry.path)?.loaded
@@ -451,6 +559,7 @@ function App() {
     exploreRegistry,
     showWritableOnly,
     skills,
+    recommendList,
   ])
 
   // Derive the effective selection synchronously during render to avoid a
@@ -502,6 +611,15 @@ function App() {
     if (!selectedSkill) return []
     return collectionIdsContainingSkill(collectionsState, selectedSkill)
   }, [collectionsState, selectedSkill])
+
+  const recommendHintBySkillId = useMemo(() => {
+    if (browseMode !== 'recommend') return undefined
+    const m: Record<string, string> = {}
+    for (const [id, meta] of Object.entries(recommendMetaById)) {
+      m[id] = meta.reason
+    }
+    return m
+  }, [browseMode, recommendMetaById])
 
   const selectedSkillFile = selectedSkill?.skillFile
 
@@ -775,6 +893,7 @@ function App() {
   }
 
   const handleBrowseModeChange = (mode: typeof browseMode) => {
+    if (mode !== 'recommend') setRecommendPanelError(null)
     setBrowseMode(mode)
   }
 
@@ -824,8 +943,6 @@ function App() {
       {/* Top: title + search */}
       <CommandBar
         searchValue={searchValue}
-        resultCount={visibleSkills.length}
-        totalCount={browseMode === 'explore' ? visibleSkills.length : skills.length}
         writableOnly={showWritableOnly}
         onSearchChange={setSearchValue}
         onToggleWritable={() => setShowWritableOnly((current) => !current)}
@@ -878,6 +995,10 @@ function App() {
           onExploreError={handleExploreError}
           onExploreLoadingChange={handleExploreLoadingChange}
           exploreRefreshKey={exploreRefreshKey}
+          recommendBusy={recommendBusy}
+          onRecommend={runRecommend}
+          recommendError={recommendPanelError}
+          onDismissRecommendError={() => setRecommendPanelError(null)}
         />
 
         {/* Selected skill detail drawer */}
@@ -910,7 +1031,7 @@ function App() {
 
         {/* Skills list */}
         {browseMode === 'explore' ? (
-          isExploreLoading ? (
+          isExploreLoading && visibleSkills.length === 0 ? (
             <div className="tray-section">
               <EmptyState
                 eyebrow={null}
@@ -940,28 +1061,49 @@ function App() {
             selectedSkillId={effectiveSelectedSkillId}
             onSelectSkill={setSelectedSkillId}
             skillCountBySourceId={skillCountBySourceId}
+            recommendHintBySkillId={browseMode === 'recommend' ? recommendHintBySkillId : undefined}
           />
         ) : (
           <div className="tray-section">
             <EmptyState
-              className={browseMode === 'collections' ? 'empty-state--folder' : undefined}
-              eyebrow={browseMode === 'collections' && !activeCollectionId ? null : undefined}
-              title={
+              className={
+                browseMode === 'recommend'
+                  ? 'empty-state--recommend'
+                  : browseMode === 'collections'
+                    ? 'empty-state--folder'
+                    : undefined
+              }
+              eyebrow={
                 browseMode === 'collections' && !activeCollectionId
-                  ? '请选择文件夹'
-                  : browseMode === 'collections' && activeCollectionId
-                    ? '该文件夹暂无 skill'
-                    : '没有匹配的 skills'
+                  ? null
+                  : browseMode === 'recommend'
+                    ? null
+                    : undefined
+              }
+              title={
+                browseMode === 'recommend'
+                  ? recommendBusy
+                    ? '推荐中'
+                    : '暂无推荐'
+                  : browseMode === 'collections' && !activeCollectionId
+                    ? '请选择文件夹'
+                    : browseMode === 'collections' && activeCollectionId
+                      ? '该文件夹暂无 skill'
+                      : '没有匹配的 skills'
               }
               description={
-                browseMode === 'collections' && !activeCollectionId
-                  ? '在上方选择或新建；来源模式可勾选加入。'
-                  : browseMode === 'collections' && activeCollectionId
-                    ? '在预览勾选加入，或切至来源浏览全部。'
-                    : '尝试开启更多来源、清空搜索或新建 skill。'
+                browseMode === 'recommend'
+                  ? recommendBusy
+                    ? '正在匹配技能…'
+                    : '填写任务描述后点击「推荐」。'
+                  : browseMode === 'collections' && !activeCollectionId
+                    ? '在上方选择或新建；来源模式可勾选加入。'
+                    : browseMode === 'collections' && activeCollectionId
+                      ? '在预览勾选加入，或切至来源浏览全部。'
+                      : '尝试开启更多来源、清空搜索或新建 skill。'
               }
-              actionLabel="新建 skill"
-              onAction={() => setEditorState({ mode: 'create' })}
+              actionLabel={browseMode === 'recommend' ? undefined : '新建 skill'}
+              onAction={browseMode === 'recommend' ? undefined : () => setEditorState({ mode: 'create' })}
             />
           </div>
         )}

@@ -6,11 +6,12 @@
 
 支持 Cursor、Codex、Claude Code、Windsurf、Amp 等工具的 skills 目录，统一扫描、浏览、编辑与跨来源复制。
 
+<p align="center">
+  <img src="assets/readme/image1.png" alt="Skills Manager 主界面" width="49%" />
+  <img src="assets/readme/image2.png" alt="探索与其他视图" width="49%" />
+</p>
 
-| Skills Manager 主界面 | 探索 / 来源等视图示例 |
-| ------------------ | ------------ |
-| Skills Manager 主界面 | 探索与其他视图      |
-
+<p align="center"><sub>左：主界面 · 右：探索 / 来源等视图示例</sub></p>
 
 ## 功能特性
 

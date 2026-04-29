@@ -8,6 +8,10 @@
 
 左：主界面 · 右：探索 / 来源等视图示例
 
+![主界面](assets/readme/image1.png)
+
+![探索 / 来源等视图示例](assets/readme/image2.png)
+
 ## 功能特性
 
 - **多来源与整理** — 聚合 Cursor / Codex / Claude / Agents 等常用 skills 目录与自定义路径；全部来源视图可合并相同内容；全文搜索、Collections、来源配置的导入导出（及推荐用 API，均在右上角设置）

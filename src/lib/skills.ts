@@ -170,10 +170,12 @@ function dedupeBySourceAndName(skills: SkillRecord[]): SkillRecord[] {
 }
 
 /**
- * When showing all sources at once, merge skills that share the same name.
- * Skill names are the stable identity across tool-specific copies; the body
- * may drift slightly between Cursor/Codex/Agents exports.
- * The "primary" copy is chosen by preferring writable > shorter path > alphabetical.
+ * When showing all sources at once, merge skills that share the same name (case-insensitive).
+ *
+ * **Note:** the export name suggests content comparison; implementation groups **by name only**.
+ * SKILL.md bodies may differ across copies; `mergedPaths` lists alternate filesystem locations.
+ * The primary row prefers writable sources, then shorter paths, then lexicographic path order.
+ *
  * Alternate paths are stored in `mergedPaths` on the primary record.
  */
 export function mergeSkillsByContent(skills: SkillRecord[]): SkillRecord[] {
@@ -218,6 +220,11 @@ export function mergeSkillsByContent(skills: SkillRecord[]): SkillRecord[] {
   }
 
   return result.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** Multiple sources contribute paths for the same skill name (merged row); bodies may still differ. */
+export function skillHasMergedAlternates(skill: SkillRecord): boolean {
+  return Boolean(skill.mergedPaths && skill.mergedPaths.length > 0)
 }
 
 /** Single-line description for compact preview header; hides generic placeholders. */
@@ -275,7 +282,8 @@ export function normalizeSkills(
       }
 
       const previewBody = buildExcerpt(parsed.content)
-      const searchIndex = [name, description, source.label, rawSkill.relativePath, previewBody]
+      const pathFold = rawSkill.relativePath.replace(/[/\\]+/g, ' ')
+      const searchIndex = [name, description, source.label, rawSkill.relativePath, pathFold, previewBody]
         .join(' ')
         .toLowerCase()
 

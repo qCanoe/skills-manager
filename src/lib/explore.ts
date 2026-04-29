@@ -21,6 +21,14 @@ export const BUILT_IN_REGISTRIES: ExploreRegistry[] = [
     skillsPath: 'skills',
   },
   {
+    id: 'mattpocock-skills',
+    label: 'mattpocock/skills',
+    owner: 'mattpocock',
+    repo: 'skills',
+    branch: 'main',
+    skillsPath: 'skills',
+  },
+  {
     id: 'garrytan-gstack',
     label: 'garrytan/gstack',
     owner: 'garrytan',
@@ -75,6 +83,11 @@ export interface ExploreContentProgress {
 export interface ExploreContentLoadResult {
   rawByPath: Map<string, string>
   loadedByPath: Map<string, LoadedContent>
+}
+
+/** Metadata when only the GitHub tree index is loaded — SKILL.md bodies load on demand (see ensureExploreContent). */
+export interface ExploreIndexMeta {
+  indexTotal: number
 }
 
 interface ExploreContentLoadOptions {
@@ -166,7 +179,13 @@ export function adaptExploreEntryToSkillRecord(
     namespace: undefined,
     previewBody: loadedContent?.previewBody ?? '',
     tags: [],
-    searchIndex: `${entry.name} ${entry.category}`.toLowerCase(),
+    searchIndex: (() => {
+      const dirFold = entry.skillDir.replace(/[/\\]+/g, ' ')
+      const fromBody = loadedContent
+        ? ` ${loadedContent.description} ${loadedContent.previewBody}`
+        : ''
+      return `${entry.name} ${entry.category} ${entry.skillDir} ${dirFold}${fromBody}`.toLowerCase()
+    })(),
     mergedPaths: undefined,
     exploreCategory: entry.category,
   }

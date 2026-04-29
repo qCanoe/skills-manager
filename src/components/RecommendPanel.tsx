@@ -1,5 +1,5 @@
 import { LoaderCircle, Sparkles, X } from 'lucide-react'
-import { useEffect, useId, useMemo, useState, type FormEvent } from 'react'
+import { useId, useMemo, useState, type FormEvent } from 'react'
 
 import { isAiRecommendConfigured, loadAiRecommendSettings } from '../lib/ai-settings'
 import { RECOMMEND_ALL_SCOPE_ID, RECOMMEND_NO_SCOPE_ID } from '../lib/recommend'
@@ -59,14 +59,13 @@ export function RecommendPanel({
     return out
   }, [nonemptyEnabledSources])
 
-  useEffect(() => {
+  const { effectiveScopeId, scopeUsable } = useMemo(() => {
     const values = scopeOptions.map((o) => o.value)
-    if (values.includes(scopeId)) return
-    const first = scopeOptions[0]?.value
-    if (first) setScopeId(first)
+    const id = values.includes(scopeId)
+      ? scopeId
+      : (scopeOptions[0]?.value ?? RECOMMEND_NO_SCOPE_ID)
+    return { effectiveScopeId: id, scopeUsable: id !== RECOMMEND_NO_SCOPE_ID }
   }, [scopeOptions, scopeId])
-
-  const scopeUsable = scopeId !== RECOMMEND_NO_SCOPE_ID
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -79,7 +78,7 @@ export function RecommendPanel({
       return
     void onRecommend({
       prompt: prompt.trim(),
-      scopeId,
+      scopeId: effectiveScopeId,
     })
   }
 
@@ -134,7 +133,7 @@ export function RecommendPanel({
             <span>范围</span>
             <Select
               id={`${formId}-scope`}
-              value={scopeId}
+              value={effectiveScopeId}
               options={scopeOptions}
               onChange={setScopeId}
               disabled={busy || !scopeUsable}

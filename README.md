@@ -7,9 +7,9 @@
 支持 Cursor、Codex、Claude Code、Windsurf、Amp 等工具的 skills 目录，统一扫描、浏览、编辑与跨来源复制。
 
 
-|     |     |
-| --- | --- |
-|     |     |
+| Skills Manager 主界面 | 探索 / 来源等视图示例 |
+| ------------------ | ------------ |
+| Skills Manager 主界面 | 探索与其他视图      |
 
 
 ## 功能特性

@@ -1,9 +1,9 @@
 import { LoaderCircle, Sparkles, X } from 'lucide-react'
-import { useId, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useId, useMemo, useState, type FormEvent } from 'react'
 
 import { isAiRecommendConfigured, loadAiRecommendSettings } from '../lib/ai-settings'
-import { RECOMMEND_ALL_SCOPE_ID, RECOMMEND_PLUGIN_SCOPE_ID } from '../lib/recommend'
-import type { SourceConfig } from '../types'
+import { RECOMMEND_ALL_SCOPE_ID, RECOMMEND_NO_SCOPE_ID } from '../lib/recommend'
+import type { SkillRecord, SourceConfig } from '../types'
 import { Select, type SelectOption } from './Select'
 
 export interface RecommendRunPayload {
@@ -13,6 +13,8 @@ export interface RecommendRunPayload {
 
 interface RecommendPanelProps {
   sources: SourceConfig[]
+  /** 当前索引到的 skills，用于判断各来源是否为空（空目录不出现在范围选项里）。 */
+  skills: SkillRecord[]
   busy: boolean
   onRecommend: (payload: RecommendRunPayload) => void | Promise<void>
   /** 最近一次推荐流程失败说明（与顶部横幅可同时存在，便于在表单旁对照）。 */
@@ -22,6 +24,7 @@ interface RecommendPanelProps {
 
 export function RecommendPanel({
   sources,
+  skills,
   busy,
   onRecommend,
   lastError,
@@ -30,19 +33,50 @@ export function RecommendPanel({
   const formId = useId()
   const [prompt, setPrompt] = useState('')
   const [scopeId, setScopeId] = useState(RECOMMEND_ALL_SCOPE_ID)
-  const enabledSources = useMemo(() => sources.filter((source) => source.enabled), [sources])
-  const scopeOptions = useMemo<SelectOption[]>(
-    () => [
-      { value: RECOMMEND_ALL_SCOPE_ID, label: '全部' },
-      ...enabledSources.map((source) => ({ value: source.id, label: source.label })),
-      { value: RECOMMEND_PLUGIN_SCOPE_ID, label: '插件缓存' },
-    ],
-    [enabledSources],
-  )
+
+  const nonemptyEnabledSources = useMemo(() => {
+    return sources.filter((source) => {
+      if (!source.enabled) return false
+      return skills.some((row) => row.sourceId === source.id)
+    })
+  }, [sources, skills])
+
+  const scopeOptions = useMemo<SelectOption[]>(() => {
+    const out: SelectOption[] = []
+    const nSrc = nonemptyEnabledSources.length
+    if (nSrc >= 2) {
+      out.push({ value: RECOMMEND_ALL_SCOPE_ID, label: '全部' })
+    }
+    for (const s of nonemptyEnabledSources) {
+      out.push({ value: s.id, label: s.label })
+    }
+    if (out.length === 0) {
+      out.push({
+        value: RECOMMEND_NO_SCOPE_ID,
+        label: '暂无含 skill 的范围',
+      })
+    }
+    return out
+  }, [nonemptyEnabledSources])
+
+  useEffect(() => {
+    const values = scopeOptions.map((o) => o.value)
+    if (values.includes(scopeId)) return
+    const first = scopeOptions[0]?.value
+    if (first) setScopeId(first)
+  }, [scopeOptions, scopeId])
+
+  const scopeUsable = scopeId !== RECOMMEND_NO_SCOPE_ID
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!prompt.trim() || busy || !isAiRecommendConfigured(loadAiRecommendSettings())) return
+    if (
+      !prompt.trim() ||
+      busy ||
+      !scopeUsable ||
+      !isAiRecommendConfigured(loadAiRecommendSettings())
+    )
+      return
     void onRecommend({
       prompt: prompt.trim(),
       scopeId,
@@ -103,7 +137,7 @@ export function RecommendPanel({
               value={scopeId}
               options={scopeOptions}
               onChange={setScopeId}
-              disabled={busy}
+              disabled={busy || !scopeUsable}
               menuAriaLabel="选择推荐范围"
             />
           </label>
@@ -119,15 +153,17 @@ export function RecommendPanel({
           <button
             type="submit"
             className="accent-button recommend-panel__submit"
-            disabled={busy || !prompt.trim() || !apiReady}
+            disabled={busy || !prompt.trim() || !apiReady || !scopeUsable}
             aria-label={
               busy
                 ? '正在推荐，请稍候'
                 : !apiReady
                   ? '请先完成模型 API 配置'
-                  : !prompt.trim()
-                    ? '请先填写任务描述'
-                    : '根据当前任务生成推荐列表'
+                  : !scopeUsable
+                    ? '暂无可用范围'
+                    : !prompt.trim()
+                      ? '请先填写任务描述'
+                      : '根据当前任务生成推荐列表'
             }
           >
             {busy ? (

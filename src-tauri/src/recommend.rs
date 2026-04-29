@@ -1,24 +1,18 @@
 use std::{
   collections::HashSet,
-  ffi::OsStr,
+  error::Error,
   fs,
   path::{Path, PathBuf},
-  time::UNIX_EPOCH,
 };
 
 use serde::{Deserialize, Serialize};
-use walkdir::WalkDir;
 
-use super::{
-  append_discovered_skills, build_raw_excerpt, collect_extras, home_join, normalize_relative_path,
-  DiscoveredSkill, SourceConfig,
-};
+use super::{append_discovered_skills, DiscoveredSkill, SourceConfig};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecommendScanRequest {
   pub sources: Vec<SourceConfig>,
-  pub include_plugin_cache: bool,
   pub workspace_root: Option<String>,
 }
 
@@ -34,79 +28,14 @@ fn dedupe_by_skill_file(discovered: Vec<DiscoveredSkill>) -> Vec<DiscoveredSkill
   out
 }
 
-fn path_contains_skills_segment(path: &Path) -> bool {
-  path.iter().any(|c| {
-    c.to_string_lossy().eq_ignore_ascii_case("skills")
-  })
-}
-
-fn append_plugin_cache_skills(discovered: &mut Vec<DiscoveredSkill>) -> Result<(), String> {
-  let cache_root = home_join(&[".cursor", "plugins", "cache"])?;
-  let root = PathBuf::from(&cache_root);
-  if !root.is_dir() {
-    return Ok(());
-  }
-
-  let pseudo = SourceConfig {
-    id: "rec-plugin-skills".into(),
-    label: "插件 skills".into(),
-    root_path: cache_root.clone(),
-    writable: false,
-    kind: "custom".into(),
-    enabled: true,
-  };
-
-  for entry in WalkDir::new(&root)
-    .max_depth(18)
-    .into_iter()
-    .filter_entry(|e| e.file_name() != OsStr::new(".git"))
-    .filter_map(Result::ok)
-  {
-    if !entry.file_type().is_file() {
-      continue;
-    }
-    if !entry.file_name().to_string_lossy().eq_ignore_ascii_case("SKILL.md") {
-      continue;
-    }
-    if !path_contains_skills_segment(entry.path()) {
-      continue;
-    }
-
-    let skill_file = entry.path().to_path_buf();
-    let Some(skill_dir) = skill_file.parent().map(Path::to_path_buf) else {
-      continue;
-    };
-    let Ok(relative) = skill_file.strip_prefix(&root) else {
-      continue;
-    };
-    let Ok(raw_content) = fs::read_to_string(&skill_file) else {
-      continue;
-    };
-    let extras = collect_extras(&skill_dir);
-    let modified_at_epoch = entry
-      .metadata()
-      .ok()
-      .and_then(|metadata| metadata.modified().ok())
-      .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
-      .map(|duration| duration.as_secs());
-
-    discovered.push(DiscoveredSkill {
-      source_id: pseudo.id.clone(),
-      root_path: pseudo.root_path.clone(),
-      skill_dir: skill_dir.to_string_lossy().to_string(),
-      skill_file: skill_file.to_string_lossy().to_string(),
-      relative_path: normalize_relative_path(relative),
-      extras,
-      raw_excerpt: build_raw_excerpt(&raw_content),
-      modified_at_epoch,
-    });
-  }
-
-  Ok(())
-}
-
 #[tauri::command]
-pub fn scan_recommend_inventory(request: RecommendScanRequest) -> Result<Vec<DiscoveredSkill>, String> {
+pub async fn scan_recommend_inventory(request: RecommendScanRequest) -> Result<Vec<DiscoveredSkill>, String> {
+  tauri::async_runtime::spawn_blocking(move || scan_recommend_inventory_blocking(request))
+    .await
+    .map_err(|e| format!("扫描中断：{e}"))?
+}
+
+fn scan_recommend_inventory_blocking(request: RecommendScanRequest) -> Result<Vec<DiscoveredSkill>, String> {
   let mut discovered = Vec::new();
 
   for source in request.sources.into_iter().filter(|s| s.enabled) {
@@ -147,10 +76,6 @@ pub fn scan_recommend_inventory(request: RecommendScanRequest) -> Result<Vec<Dis
         }
       }
     }
-  }
-
-  if request.include_plugin_cache {
-    append_plugin_cache_skills(&mut discovered)?;
   }
 
   Ok(dedupe_by_skill_file(discovered))
@@ -285,6 +210,71 @@ struct AiPayload {
   recommendations: Vec<AiRecParsed>,
 }
 
+/// OpenRouter 兼容端点默认 Base（与应用内「API Base」一致即可走 OpenRouter）。
+pub const OPENROUTER_API_BASE: &str = "https://openrouter.ai/api/v1";
+
+fn api_base_targets_openrouter(base: &str) -> bool {
+  let trim = base.trim().trim_end_matches('/');
+  let normalized = trim.to_ascii_lowercase();
+  normalized.contains("openrouter.ai")
+    || normalized.contains("openrouter.com")
+    || trim.eq_ignore_ascii_case(OPENROUTER_API_BASE.trim_end_matches('/'))
+}
+
+/// OpenRouter 在「API Base」为该端点时读取以下环境变量并附加可选请求头（应用署名与排行，不参与鉴权）。
+/// 优先级：`SKILLS_MANAGER_OPENROUTER_*` 优先于通用的 `OPENROUTER_*`。
+///
+/// | 变量 | 请求头 |
+/// |------|--------|
+/// | `SKILLS_MANAGER_OPENROUTER_HTTP_REFERER` 或 `OPENROUTER_HTTP_REFERER` | `HTTP-Referer` |
+/// | `SKILLS_MANAGER_OPENROUTER_TITLE` 或 `OPENROUTER_APP_TITLE` | `X-OpenRouter-Title` |
+/// | `SKILLS_MANAGER_OPENROUTER_CATEGORIES` 或 `OPENROUTER_CATEGORIES` | `X-OpenRouter-Categories` |
+fn openrouter_optional_headers_from_env() -> Vec<(&'static str, String)> {
+  let mut pairs: Vec<(&'static str, String)> = Vec::new();
+  push_env_as_header(
+    &mut pairs,
+    &[
+      "SKILLS_MANAGER_OPENROUTER_HTTP_REFERER",
+      "OPENROUTER_HTTP_REFERER",
+    ],
+    "HTTP-Referer",
+  );
+  push_env_as_header(
+    &mut pairs,
+    &["SKILLS_MANAGER_OPENROUTER_TITLE", "OPENROUTER_APP_TITLE"],
+    "X-OpenRouter-Title",
+  );
+  push_env_as_header(
+    &mut pairs,
+    &["SKILLS_MANAGER_OPENROUTER_CATEGORIES", "OPENROUTER_CATEGORIES"],
+    "X-OpenRouter-Categories",
+  );
+  pairs
+}
+
+fn push_env_as_header(out: &mut Vec<(&'static str, String)>, keys: &[&'static str], header_name: &'static str) {
+  for key in keys {
+    if let Ok(v) = std::env::var(key) {
+      let t = v.trim().to_string();
+      if !t.is_empty() {
+        out.push((header_name, t));
+        return;
+      }
+    }
+  }
+}
+
+fn error_chain_text(err: &dyn Error) -> String {
+  let mut s = err.to_string();
+  let mut src = err.source();
+  while let Some(e) = src {
+    s.push_str("；");
+    s.push_str(&e.to_string());
+    src = e.source();
+  }
+  s
+}
+
 fn extract_json_object(text: &str) -> Result<String, String> {
   let t = text.trim();
   let start = t.find('{').ok_or_else(|| "模型输出中未找到 JSON 对象。".to_string())?;
@@ -296,7 +286,7 @@ fn extract_json_object(text: &str) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn recommend_ai_rerank(request: RecommendAiRequest) -> Result<RecommendAiRerankResponse, String> {
+pub async fn recommend_ai_rerank(request: RecommendAiRequest) -> Result<RecommendAiRerankResponse, String> {
   let base = request.api_base.trim().trim_end_matches('/');
   if base.is_empty() {
     return Err("API Base 不能为空。".into());
@@ -332,21 +322,45 @@ confidence 必须是小写英文。score 为 0 到 1。"#;
     ]
   });
 
-  let client = reqwest::blocking::Client::builder()
+  // HTTP/1.1：部分网络/代理对 HTTP/2 不稳定，会出现 “connection closed before message completed”。
+  let client = reqwest::Client::builder()
+    .http1_only()
     .timeout(std::time::Duration::from_secs(60))
     .build()
     .map_err(|e| format!("HTTP 客户端初始化失败：{e}"))?;
 
-  let resp = client
-    .post(&url)
-    .header("Authorization", format!("Bearer {}", request.api_key.trim()))
-    .header("Content-Type", "application/json")
-    .json(&body)
-    .send()
-    .map_err(|e| format!("请求模型失败：{e}"))?;
+  let mut attempt = 0u32;
+  let resp = loop {
+    let mut req = client
+      .post(&url)
+      .header("Authorization", format!("Bearer {}", request.api_key.trim()))
+      .header("Content-Type", "application/json");
+
+    if api_base_targets_openrouter(base) {
+      for (name, value) in openrouter_optional_headers_from_env() {
+        req = req.header(name, value);
+      }
+    }
+
+    match req.json(&body).send().await {
+      Ok(r) => break r,
+      Err(e) => {
+        attempt += 1;
+        if attempt >= 3 {
+          return Err(format!("请求模型失败：{}", error_chain_text(&e)));
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(400 * attempt as u64)).await;
+      }
+    }
+  };
 
   let status = resp.status();
-  let text = resp.text().map_err(|e| format!("读取响应失败：{e}"))?;
+  // 部分模型/OpenRouter 链路可能返回严格 UTF-8 以外的字节，`text()` 会报 “error decoding response body”.
+  let bytes = resp
+    .bytes()
+    .await
+    .map_err(|e| format!("读取响应失败：{}", error_chain_text(&e)))?;
+  let text = String::from_utf8_lossy(&bytes).into_owned();
   if !status.is_success() {
     return Err(format!("模型 API 错误（HTTP {status}）：{text}"));
   }

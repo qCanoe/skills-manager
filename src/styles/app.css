@@ -177,6 +177,46 @@
   padding: 7px 9px;
 }
 
+.settings-menu__save {
+  width: 100%;
+  margin-top: 12px;
+  padding: 6px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-soft);
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    background-color 180ms cubic-bezier(0.25, 0.1, 0.25, 1),
+    border-color 180ms cubic-bezier(0.25, 0.1, 0.25, 1),
+    color 180ms cubic-bezier(0.25, 0.1, 0.25, 1),
+    transform 120ms cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.settings-menu__save:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.settings-menu__save:active {
+  background: var(--bg-active);
+  transform: scale(0.99);
+}
+
+.settings-menu__save:focus {
+  outline: none;
+}
+
+.settings-menu__save:focus-visible {
+  outline: 2px solid var(--border-accent);
+  outline-offset: 2px;
+}
+
 .settings-menu__check {
   display: flex;
   align-items: center;
@@ -2682,7 +2722,7 @@ button:focus-visible {
   align-items: flex-start;
   gap: 10px;
   min-width: min(280px, calc(100vw - 32px));
-  max-width: min(300px, calc(100vw - 32px));
+  max-width: min(380px, calc(100vw - 32px));
   padding: 10px 12px 0;
   border-radius: var(--radius-md);
   background: var(--bg-panel);
@@ -2701,6 +2741,12 @@ button:focus-visible {
 .toast--visible {
   opacity: 1;
   transform: translateX(0);
+}
+
+/* 成功类 Toast：浅绿底与现有勾选图标呼应，保持柔和不抢眼 */
+.toast:not(.toast--error) {
+  background: color-mix(in srgb, var(--bg-panel) 82%, var(--success-soft));
+  border-color: color-mix(in srgb, var(--border) 75%, var(--success) 18%);
 }
 
 .toast__inner {
@@ -2756,10 +2802,10 @@ button:focus-visible {
 .toast__detail {
   font-size: 0.74rem;
   color: var(--text-muted);
-  line-height: 1.4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.45;
+  /* 允许多行展示错误详情；单行 nowrap + ellipsis 会令中文长句被拦腰截断，观感类似「乱码」 */
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .toast__close {

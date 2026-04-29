@@ -753,6 +753,7 @@ function App() {
         desktopFeatures={bootstrapped && isTauriRuntime()}
         onExportSources={bootstrapped && isTauriRuntime() ? handleExportSources : undefined}
         onImportSourcesText={bootstrapped && isTauriRuntime() ? handleImportSourcesText : undefined}
+        onAiSettingsSaved={() => pushToast('保存成功')}
       />
 
       {/* Error banner */}

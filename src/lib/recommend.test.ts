@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import type { SkillRecord } from '../types'
 import {
   RECOMMEND_ALL_SCOPE_ID,
-  RECOMMEND_PLUGIN_SCOPE_ID,
   buildRecommendScanScope,
   mergeAiRecommendations,
   rankRecommendCandidates,
@@ -81,25 +80,16 @@ describe('buildRecommendScanScope', () => {
     },
   ]
 
-  it('scans all enabled sources plus plugin cache for the all scope', () => {
+  it('uses all enabled sources for the all scope', () => {
     const scope = buildRecommendScanScope(sources, RECOMMEND_ALL_SCOPE_ID)
 
     expect(scope.sources.map((s) => s.id)).toEqual(['cursor'])
-    expect(scope.includePluginCache).toBe(true)
   })
 
-  it('scans only the selected configured source', () => {
+  it('uses only the selected configured source', () => {
     const scope = buildRecommendScanScope(sources, 'cursor')
 
     expect(scope.sources.map((s) => s.id)).toEqual(['cursor'])
-    expect(scope.includePluginCache).toBe(false)
-  })
-
-  it('can scan only the plugin cache source', () => {
-    const scope = buildRecommendScanScope(sources, RECOMMEND_PLUGIN_SCOPE_ID)
-
-    expect(scope.sources).toEqual([])
-    expect(scope.includePluginCache).toBe(true)
   })
 })
 

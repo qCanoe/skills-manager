@@ -13,6 +13,8 @@ interface CommandBarProps {
   desktopFeatures?: boolean
   onExportSources?: () => void | Promise<void>
   onImportSourcesText?: (json: string) => void | Promise<void>
+  /** 在桌面端保存推荐 API 设置成功后调用（例如弹出 Toast）。 */
+  onAiSettingsSaved?: () => void
 }
 
 export function CommandBar({
@@ -25,6 +27,7 @@ export function CommandBar({
   desktopFeatures = false,
   onExportSources,
   onImportSourcesText,
+  onAiSettingsSaved,
 }: CommandBarProps) {
   const searchInputRef = useRef<HTMLInputElement>(null)
   const settingsWrapRef = useRef<HTMLDivElement>(null)
@@ -81,9 +84,16 @@ export function CommandBar({
   const triggerImport = () => importInputRef.current?.click()
 
   const patchAiSettings = (patch: Partial<AiRecommendSettings>) => {
-    const next = { ...aiSettings, ...patch }
-    setAiSettings(next)
-    persistAiRecommendSettings(patch)
+    setAiSettings((prev) => ({ ...prev, ...patch }))
+  }
+
+  const handleSaveAiRecommendSettings = () => {
+    persistAiRecommendSettings({
+      apiBase: aiSettings.apiBase,
+      apiKey: aiSettings.apiKey,
+      model: aiSettings.model,
+    })
+    onAiSettingsSaved?.()
   }
 
   const handleImportFile = (event: ChangeEvent<HTMLInputElement>) => {
@@ -253,6 +263,13 @@ export function CommandBar({
                       spellCheck={false}
                       autoComplete="off"
                     />
+                    <button
+                      type="button"
+                      className="settings-menu__save"
+                      onClick={handleSaveAiRecommendSettings}
+                    >
+                      保存
+                    </button>
                   </div>
                 </div>
               ) : null}

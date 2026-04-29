@@ -1,7 +1,8 @@
 import type { SkillRecord, SkillRecommendationMeta, SourceConfig } from '../types'
 
 export const RECOMMEND_ALL_SCOPE_ID = '__recommend_all__'
-export const RECOMMEND_PLUGIN_SCOPE_ID = '__recommend_plugin_cache__'
+/** 范围下拉无可用项时的占位 value，不得用于实际扫描。 */
+export const RECOMMEND_NO_SCOPE_ID = '__recommend_none__'
 
 /** Synthetic sources for ids produced by `scan_recommend_inventory` (labels only; roots come from scan rows). */
 export const RECOMMEND_SYNTHETIC_SOURCES: SourceConfig[] = [
@@ -21,14 +22,6 @@ export const RECOMMEND_SYNTHETIC_SOURCES: SourceConfig[] = [
     kind: 'custom',
     enabled: true,
   },
-  {
-    id: 'rec-plugin-skills',
-    label: '插件 skills',
-    rootPath: '',
-    writable: false,
-    kind: 'custom',
-    enabled: true,
-  },
 ]
 
 export function mergeSourcesForRecommend(userSources: SourceConfig[]): SourceConfig[] {
@@ -39,22 +32,17 @@ export function mergeSourcesForRecommend(userSources: SourceConfig[]): SourceCon
 
 export interface RecommendScanScope {
   sources: SourceConfig[]
-  includePluginCache: boolean
 }
 
 export function buildRecommendScanScope(userSources: SourceConfig[], scopeId: string): RecommendScanScope {
   const enabledSources = userSources.filter((source) => source.enabled)
 
-  if (scopeId === RECOMMEND_PLUGIN_SCOPE_ID) {
-    return { sources: [], includePluginCache: true }
-  }
-
   const selectedSource = enabledSources.find((source) => source.id === scopeId)
   if (selectedSource) {
-    return { sources: [selectedSource], includePluginCache: false }
+    return { sources: [selectedSource] }
   }
 
-  return { sources: enabledSources, includePluginCache: true }
+  return { sources: enabledSources }
 }
 
 export interface RecommendCandidatePayload {
@@ -105,7 +93,6 @@ export function scoreSkillForRecommend(skill: SkillRecord, tokens: string[], con
   }
 
   if (skill.sourceId.startsWith('rec-workspace')) score += 1.2
-  if (skill.sourceId === 'rec-plugin-skills') score += 0.6
 
   return score
 }

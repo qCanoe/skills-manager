@@ -4,6 +4,7 @@ import { type Dispatch, type SetStateAction, useCallback, useState } from 'react
 import type { RecommendRunPayload } from '../components/RecommendPanel'
 import { loadAiRecommendSettings, isAiRecommendConfigured } from '../lib/ai-settings'
 import {
+  RECOMMEND_NO_SCOPE_ID,
   buildRecommendCandidatePayload,
   buildRecommendScanScope,
   mergeAiRecommendations,
@@ -42,6 +43,10 @@ export function useRecommendFlow({
 
   const runRecommend = useCallback(
     async (payload: RecommendRunPayload) => {
+      if (payload.scopeId === RECOMMEND_NO_SCOPE_ID) {
+        setRecommendPanelError('暂无可扫描的范围。')
+        return
+      }
       if (!isTauriRuntime()) {
         const msg = '请在桌面应用中打开后再使用推荐。'
         setRecommendPanelError(msg)
@@ -66,7 +71,6 @@ export function useRecommendFlow({
         const raw = await invoke<RawSkillRecord[]>('scan_recommend_inventory', {
           request: {
             sources: scanScope.sources,
-            includePluginCache: scanScope.includePluginCache,
             workspaceRoot: null,
           },
         })

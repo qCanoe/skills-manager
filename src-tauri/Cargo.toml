@@ -18,7 +18,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.5.6", features = [] }
 
 [dependencies]
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking", "json"] }
+# native-roots：在 Windows 上合并系统证书库，减少企业代理/杀软 TLS 拦截导致的「error sending request」
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "blocking", "json"] }
 dirs = "6"
 log = "0.4"
 serde_json = "1.0"
@@ -27,3 +28,4 @@ tauri = { version = "2.10.3", features = ["tray-icon"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-log = "2"
 walkdir = "2.5.0"
+tokio = { version = "1", features = ["time"] }

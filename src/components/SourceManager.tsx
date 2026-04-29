@@ -378,6 +378,7 @@ export function SourceManager({
           <div key="recommend" className="browse-panel__surface">
             <RecommendPanel
               sources={sources}
+              skills={skills}
               busy={recommendBusy}
               onRecommend={(payload) => void onRecommend?.(payload)}
               lastError={recommendError}

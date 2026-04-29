@@ -1,19 +1,14 @@
 import { LoaderCircle, RotateCcw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { BUILT_IN_REGISTRIES, listExploreSkills, loadExploreSkillContents } from '../lib/explore'
+import { BUILT_IN_REGISTRIES, listExploreSkills, type ExploreIndexMeta } from '../lib/explore'
 import { Select } from './Select'
-import type { ExploreContentLoadResult, ExploreContentProgress } from '../lib/explore'
 import type { ExploreEntry, ExploreRegistry } from '../types'
 
 interface ExplorePanelProps {
   /** Increment from parent after `explore_clear_cache` to force re-fetch. */
   refreshKey?: number
-  onEntriesChange: (
-    entries: ExploreEntry[],
-    registry: ExploreRegistry,
-    contentResult: ExploreContentLoadResult,
-  ) => void
+  onEntriesChange: (entries: ExploreEntry[], registry: ExploreRegistry, meta: ExploreIndexMeta) => void
   onError: (msg: string) => void
   onLoadingChange?: (loading: boolean) => void
 }
@@ -25,8 +20,6 @@ export function ExplorePanel({ refreshKey = 0, onEntriesChange, onError, onLoadi
   const [categories, setCategories] = useState<string[]>([])
   /** Start true so the first sync effect does not push [] to parent before fetch runs (avoids title-bar 0/0 flash). */
   const [loading, setLoading] = useState(true)
-  const [contentProgress, setContentProgress] = useState<ExploreContentProgress | null>(null)
-  const [contentResult, setContentResult] = useState<ExploreContentLoadResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const loadRunRef = useRef(0)
 
@@ -34,10 +27,10 @@ export function ExplorePanel({ refreshKey = 0, onEntriesChange, onError, onLoadi
     onLoadingChange?.(loading)
   }, [loading, onLoadingChange])
 
-  // Use a ref so that onError never becomes a loadIndex dependency.
-  // If parent re-creates the callback on every render, loadIndex won't change.
   const onErrorRef = useRef(onError)
-  useEffect(() => { onErrorRef.current = onError }, [onError])
+  useEffect(() => {
+    onErrorRef.current = onError
+  }, [onError])
 
   const registry = useMemo(
     () => BUILT_IN_REGISTRIES.find((r) => r.id === registryId) ?? BUILT_IN_REGISTRIES[0]!,
@@ -49,21 +42,12 @@ export function ExplorePanel({ refreshKey = 0, onEntriesChange, onError, onLoadi
     loadRunRef.current = runId
     setLoading(true)
     setError(null)
-    setContentProgress(null)
-    // 不清空条目与 content —— stale-while-revalidate，切换「探索」与其它 tab、或静默再拉索引时卡片不整块消失
     try {
       const entries = await listExploreSkills(registry)
-      if (loadRunRef.current !== runId) return
-      const content = await loadExploreSkillContents(registry, entries, {
-        onProgress: (event) => {
-          if (loadRunRef.current === runId) setContentProgress(event)
-        },
-      })
       if (loadRunRef.current !== runId) return
       const cats = Array.from(new Set(entries.map((e) => e.category))).sort()
       setAllEntries(entries)
       setCategories(cats)
-      setContentResult(content)
       setActiveCategory('全部')
     } catch (err) {
       if (loadRunRef.current !== runId) return
@@ -73,7 +57,7 @@ export function ExplorePanel({ refreshKey = 0, onEntriesChange, onError, onLoadi
     } finally {
       if (loadRunRef.current === runId) setLoading(false)
     }
-  }, [registry])  // onError intentionally excluded via ref
+  }, [registry])
 
   useEffect(() => {
     void loadIndex()
@@ -89,12 +73,10 @@ export function ExplorePanel({ refreshKey = 0, onEntriesChange, onError, onLoadi
     return allEntries.filter((e) => e.category === activeCategory)
   }, [allEntries, activeCategory])
 
-  // During fetch, do not notify parent with an empty list — parent may still hold the last good index
-  // (e.g. switching from 来源 → 探索) so the tray title bar does not flash 0/0 or jump.
   useEffect(() => {
-    if (loading || !contentResult) return
-    onEntriesChange(filteredEntries, registry, contentResult)
-  }, [filteredEntries, registry, loading, contentResult, onEntriesChange])
+    if (loading) return
+    onEntriesChange(filteredEntries, registry, { indexTotal: allEntries.length })
+  }, [filteredEntries, registry, loading, allEntries.length, onEntriesChange])
 
   const registryOptions = BUILT_IN_REGISTRIES.map((r) => ({
     value: r.id,
@@ -116,11 +98,7 @@ export function ExplorePanel({ refreshKey = 0, onEntriesChange, onError, onLoadi
         {loading ? (
           <div className="explore-panel__status" aria-live="polite">
             <LoaderCircle className="spin" size={14} aria-hidden="true" />
-            <span>
-              {contentProgress
-                ? `正在加载 Skill 信息 ${contentProgress.loaded}/${contentProgress.total}…`
-                : '正在拉取索引…'}
-            </span>
+            <span>正在拉取索引…</span>
           </div>
         ) : null}
 

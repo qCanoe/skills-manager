@@ -1,5 +1,4 @@
-import { ChevronDown, Library, GitMerge } from 'lucide-react'
-import { useId, useState } from 'react'
+import { Library, GitMerge } from 'lucide-react'
 import clsx from 'clsx'
 
 import { filterPathEntriesBySourceSkillCount, pathEntriesForSkill } from '../lib/skills'
@@ -21,36 +20,22 @@ export function SkillList({
   skillCountBySourceId,
   recommendHintBySkillId,
 }: SkillListProps) {
-  const [collapsed, setCollapsed] = useState(false)
-  const listRegionId = useId()
-
   return (
     <div className="tray-section">
-      <div
-        className="tray-section-header"
-        role="button"
-        tabIndex={0}
-        aria-expanded={!collapsed}
-        aria-controls={listRegionId}
-        onClick={() => setCollapsed((v) => !v)}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed((v) => !v) } }}
-      >
+      <div className="tray-section-header">
         <div className="tray-section-header__left">
           <Library size={14} style={{ color: 'var(--text-faint)' }} />
           <span className="tray-section-label">Skills</span>
         </div>
         <div className="tray-section-header__right">
           <span className="tray-section-status">{skills.length} 条</span>
-          <ChevronDown size={14} className={`tray-section-chevron ${collapsed ? 'is-collapsed' : ''}`} />
         </div>
       </div>
 
       <div
-        id={listRegionId}
         className="skill-list-region"
         role="region"
         aria-label={`Skills 列表，${skills.length} 条`}
-        hidden={collapsed}
       >
         {skills.map((skill) => (
           <button

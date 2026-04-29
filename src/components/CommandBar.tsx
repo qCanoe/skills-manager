@@ -273,7 +273,7 @@ export function CommandBar({
             aria-label="搜索"
             value={searchValue}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="搜索 skills..."
+            placeholder="搜索 skills，空格分词匹配…"
             spellCheck={false}
           />
           {searchValue && (

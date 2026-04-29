@@ -1,5 +1,4 @@
 import { invoke } from '@tauri-apps/api/core'
-import { listen } from '@tauri-apps/api/event'
 import { AlertTriangle, LoaderCircle, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, useDeferredValue } from 'react'
 
@@ -9,15 +8,15 @@ import { CopyDialog } from './components/CopyDialog'
 import { CopySourceDialog } from './components/CopySourceDialog'
 import { CommandBar } from './components/CommandBar'
 import { CollectionNameDialog } from './components/CollectionNameDialog'
-import { EmptyState } from './components/EmptyState'
 import { InstallDialog } from './components/InstallDialog'
 import { SkillEditor } from './components/SkillEditor'
-import { ExploreSkillList } from './components/ExploreSkillList'
-import { SkillList } from './components/SkillList'
 import { SkillPreview } from './components/SkillPreview'
-import type { RecommendRunPayload } from './components/RecommendPanel'
 import { SourceManager } from './components/SourceManager'
+import { TraySkillsPane } from './components/TraySkillsPane'
 import { ToastContainer, type ToastMessage } from './components/Toast'
+import { useExploreCatalog } from './hooks/useExploreCatalog'
+import { useRecommendFlow } from './hooks/useRecommendFlow'
+import { useScanAndSources } from './hooks/useScanAndSources'
 import {
   addMember,
   collectionIdsContainingSkill,
@@ -31,32 +30,17 @@ import {
   saveCollectionsState,
   type CollectionsState,
 } from './lib/collections'
-import {
-  adaptExploreEntryToSkillRecord,
-  BUILT_IN_REGISTRIES,
-  clearExploreCache,
-  type ExploreContentLoadResult,
-  type LoadedContent,
-} from './lib/explore'
-import { isAiRecommendConfigured, loadAiRecommendSettings } from './lib/ai-settings'
-import {
-  buildRecommendCandidatePayload,
-  buildRecommendScanScope,
-  mergeAiRecommendations,
-  mergeSourcesForRecommend,
-  rankRecommendCandidates,
-  type AiRerankResponse,
-} from './lib/recommend'
-import { mergeSkillsByContent, normalizeSkills } from './lib/skills'
+import { adaptExploreEntryToSkillRecord } from './lib/explore'
+import { orderSkillsForSearch, parseSearchQuery, skillMatchesSearch } from './lib/skill-search'
+import { mergeSkillsByContent } from './lib/skills'
+import { isTauriRuntime } from './lib/tauri-env'
 import {
   buildSourcesExport,
   createCustomSource,
   isSameSourcePath,
-  loadStoredSources,
   mergeImportedSources,
   normalizePathInput,
   parseSourcesExportJson,
-  persistSources,
   stringifySourcesExport,
 } from './lib/sources'
 import {
@@ -77,9 +61,6 @@ import type {
   CopySourceRequest,
   CopySkillResult,
   ExploreEntry,
-  ExploreRegistry,
-  RawSkillRecord,
-  SkillRecommendationMeta,
   SkillRecord,
   SourceConfig,
 } from './types'
@@ -95,11 +76,6 @@ interface SourceCopyContext {
   request: CopySourceRequest
   sourceLabel: string
   targetLabel: string
-}
-
-interface ExploreContentCacheEntry {
-  raw: string
-  loaded: LoadedContent
 }
 
 type CopyConflictState =
@@ -127,15 +103,22 @@ type EditorState =
   | { mode: 'edit'; skill: SkillRecord }
   | null
 
-function isTauriRuntime() {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
-}
-
 function App() {
-  const [sources, setSources] = useState<SourceConfig[]>([])
-  const sourcesRef = useRef(sources)
-  const [skills, setSkills] = useState<SkillRecord[]>([])
-  const [refreshSeq, setRefreshSeq] = useState(0)
+  const [selectedSkillId, setSelectedSkillId] = useState<string>()
+  const {
+    sources,
+    setSources,
+    skills,
+    refreshSeq,
+    isLoading,
+    bootstrapped,
+    statusLine,
+    setStatusLine,
+    errorMessage,
+    setErrorMessage,
+    refreshSkills,
+  } = useScanAndSources(setSelectedSkillId)
+
   const [loadedContent, setLoadedContent] = useState('')
   const [activeSourceId, setActiveSourceId] = useState(loadActiveSource())
   const [browseMode, setBrowseMode] = useState(loadBrowseMode)
@@ -143,32 +126,14 @@ function App() {
   const [collectionsState, setCollectionsState] = useState<CollectionsState>(() => loadCollectionsState())
   const [showWritableOnly, setShowWritableOnly] = useState(loadWritableOnly())
   const [searchValue, setSearchValue] = useState('')
-  const [selectedSkillId, setSelectedSkillId] = useState<string>()
   const [editorState, setEditorState] = useState<EditorState>(null)
   const [copyingSkill, setCopyingSkill] = useState<SkillRecord | null>(null)
   const [copyingSource, setCopyingSource] = useState<SourceConfig | null>(null)
   const [copyConflict, setCopyConflict] = useState<CopyConflictState | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [bootstrapped, setBootstrapped] = useState(false)
-  const [statusLine, setStatusLine] = useState('准备来源...')
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const [createFolderFromPreviewOpen, setCreateFolderFromPreviewOpen] = useState(false)
   const [createFolderFromPreviewKey, setCreateFolderFromPreviewKey] = useState(0)
-  const [exploreEntries, setExploreEntries] = useState<ExploreEntry[]>([])
-  const [isExploreLoading, setIsExploreLoading] = useState(false)
-  const [exploreRegistry, setExploreRegistry] = useState<ExploreRegistry>(BUILT_IN_REGISTRIES[0]!)
-  const [exploreContentCache, setExploreContentCache] = useState<Map<string, ExploreContentCacheEntry>>(
-    () => new Map(),
-  )
-  const [exploreRefreshKey, setExploreRefreshKey] = useState(0)
-  const [installingEntry, setInstallingEntry] = useState<ExploreEntry | null>(null)
-  const [recommendList, setRecommendList] = useState<SkillRecord[]>([])
-  const [recommendMetaById, setRecommendMetaById] = useState<Record<string, SkillRecommendationMeta>>({})
-  const [recommendBusy, setRecommendBusy] = useState(false)
-  const [recommendPanelError, setRecommendPanelError] = useState<string | null>(null)
   const [isTrayScrolling, setIsTrayScrolling] = useState(false)
-  const exploreRefreshPendingRef = useRef(false)
   const trayHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const trayScrollThrottle = useRef(0)
 
@@ -193,82 +158,42 @@ function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
-  const refreshSkills = useCallback(
-    async (
-      currentSources: SourceConfig[],
-      nextSelectedId?: string,
-      quiet?: boolean,
-    ): Promise<{ ok: true; count: number } | { ok: false }> => {
-      if (!quiet) {
-        setIsLoading(true)
-        setErrorMessage(null)
-        setStatusLine('扫描中...')
-      }
+  const {
+    exploreEntries,
+    isExploreLoading,
+    exploreRegistry,
+    exploreContentCache,
+    exploreFetchPath,
+    exploreRefreshKey,
+    installingEntry,
+    setInstallingEntry,
+    exploreLoadError,
+    handleExploreEntriesChange,
+    handleExploreLoadingChange,
+    handleExploreError,
+    triggerExploreRefresh,
+    ensureExploreContent,
+  } = useExploreCatalog({ pushToast, setStatusLine })
 
-      try {
-        const rawSkills = await invoke<RawSkillRecord[]>('scan_skills', {
-          sources: currentSources.filter((source) => source.enabled),
-        })
-        const normalized = normalizeSkills(rawSkills, currentSources)
-        setSkills(normalized)
-        setRefreshSeq((n) => n + 1)
-        setSelectedSkillId((previous) => nextSelectedId ?? previous ?? normalized[0]?.id)
-        setStatusLine(`已索引 ${normalized.length} 个 skills`)
-        return { ok: true, count: normalized.length }
-      } catch (error) {
-        if (!quiet) {
-          setErrorMessage(error instanceof Error ? error.message : String(error))
-          setStatusLine('扫描失败。')
-        }
-        return { ok: false }
-      } finally {
-        if (!quiet) {
-          setIsLoading(false)
-        }
-      }
-    },
-    [],
-  )
-
-  const handleExploreEntriesChange = useCallback((
-    entries: ExploreEntry[],
-    registry: ExploreRegistry,
-    contentResult: ExploreContentLoadResult,
-  ) => {
-    const nextCache = new Map<string, ExploreContentCacheEntry>()
-    for (const [path, raw] of contentResult.rawByPath) {
-      const loaded = contentResult.loadedByPath.get(path)
-      if (loaded) nextCache.set(path, { raw, loaded })
-    }
-
-    setExploreRegistry(registry)
-    setExploreContentCache(nextCache)
-    setExploreEntries(entries)
-    setStatusLine(`探索已加载 ${contentResult.loadedByPath.size} 个 skills`)
-    if (exploreRefreshPendingRef.current) {
-      exploreRefreshPendingRef.current = false
-      pushToast('探索加载完成', `已加载 ${entries.length} 个 skills`)
-    }
-    // Don't reset selectedSkillId here; effectiveSelectedSkillId already falls
-    // back to the first visible skill when the current selection disappears.
-  }, [pushToast])
-
-  const handleExploreLoadingChange = useCallback((loading: boolean) => {
-    setIsExploreLoading(loading)
-    // 不在此处清空 explore 列表或缓存 —— 否则会切回本 tab / 面板重挂载时整表闪烁；
-    // 仍以 handleExploreEntriesChange 在无 loading 时用新结果覆盖；显式刷新在 handleToolbarRefresh 里清空后再拉取。
-    if (loading) setStatusLine('正在加载探索仓库…')
-  }, [])
-
-  const handleExploreError = useCallback((msg: string) => {
-    exploreRefreshPendingRef.current = false
-    pushToast('探索加载失败', msg, 'error')
-  }, [pushToast])
+  const {
+    recommendList,
+    recommendMetaById,
+    recommendBusy,
+    recommendPanelError,
+    setRecommendPanelError,
+    runRecommend,
+    resetRecommendResults,
+  } = useRecommendFlow({
+    sources,
+    pushToast,
+    setStatusLine,
+    setErrorMessage,
+    setSelectedSkillId,
+  })
 
   const handleToolbarRefresh = useCallback(async () => {
     if (browseMode === 'recommend') {
-      setRecommendList([])
-      setRecommendMetaById({})
+      resetRecommendResults()
       setSelectedSkillId(undefined)
       const result = await refreshSkills(sources)
       if (result.ok) {
@@ -279,12 +204,7 @@ function App() {
       return
     }
     if (browseMode === 'explore') {
-      if (isTauriRuntime()) {
-        await clearExploreCache()
-      }
-      setExploreContentCache(new Map())
-      exploreRefreshPendingRef.current = true
-      setExploreRefreshKey((k) => k + 1)
+      await triggerExploreRefresh()
       return
     }
     const result = await refreshSkills(sources)
@@ -293,122 +213,7 @@ function App() {
     } else {
       pushToast('扫描失败', '请查看上方错误说明', 'error')
     }
-  }, [browseMode, pushToast, refreshSkills, sources])
-
-  const runRecommend = useCallback(
-    async (payload: RecommendRunPayload) => {
-      if (!isTauriRuntime()) {
-        const msg = '请在桌面应用中打开后再使用推荐。'
-        setRecommendPanelError(msg)
-        pushToast('推荐', '请在桌面端使用推荐。', 'error')
-        return
-      }
-      setRecommendBusy(true)
-      setErrorMessage(null)
-      setRecommendPanelError(null)
-      const aiSettings = loadAiRecommendSettings()
-      if (!isAiRecommendConfigured(aiSettings)) {
-        const msg = '请先在右上角设置中填写 API Base、API Key 与模型。'
-        setRecommendPanelError(msg)
-        pushToast('尚未配置 API', '请在设置中填写 API Base、API Key 与模型后再使用推荐。', 'error')
-        setStatusLine('推荐需先配置模型 API。')
-        setRecommendBusy(false)
-        return
-      }
-      setStatusLine('正在扫描技能…')
-      try {
-        const scanScope = buildRecommendScanScope(sources, payload.scopeId)
-        const raw = await invoke<RawSkillRecord[]>('scan_recommend_inventory', {
-          request: {
-            sources: scanScope.sources,
-            includePluginCache: scanScope.includePluginCache,
-            workspaceRoot: null,
-          },
-        })
-        const mergedSources = mergeSourcesForRecommend(scanScope.sources)
-        const normalized = normalizeSkills(raw, mergedSources)
-        setStatusLine(`候选 ${normalized.length} 个，匹配中…`)
-
-        const projectContext = ''
-        const candidates = rankRecommendCandidates(normalized, payload.prompt, projectContext, 30)
-
-        setStatusLine('模型排序中…')
-        let aiResponse: AiRerankResponse
-        try {
-          aiResponse = await invoke<AiRerankResponse>('recommend_ai_rerank', {
-            request: {
-              apiBase: aiSettings.apiBase.trim(),
-              apiKey: aiSettings.apiKey.trim(),
-              model: aiSettings.model.trim(),
-              userPrompt: payload.prompt,
-              projectContext,
-              candidatesJson: JSON.stringify(buildRecommendCandidatePayload(candidates)),
-            },
-          })
-        } catch (err) {
-          const detail = err instanceof Error ? err.message : String(err)
-          setRecommendPanelError(detail)
-          pushToast('模型 API 调用失败', detail, 'error')
-          setStatusLine('推荐失败。')
-          return
-        }
-
-        const { ordered, metaBySkillId } = mergeAiRecommendations(candidates, aiResponse)
-        setRecommendList(ordered)
-        setRecommendMetaById(metaBySkillId)
-        setSelectedSkillId(ordered[0]?.id)
-        setRecommendPanelError(null)
-        setStatusLine(`推荐完成 · ${ordered.length} 个`)
-        pushToast('推荐完成', `已选出 ${ordered.length} 个`)
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        setErrorMessage(msg)
-        setRecommendPanelError(msg)
-        setStatusLine('推荐失败。')
-        pushToast('推荐失败', msg, 'error')
-      } finally {
-        setRecommendBusy(false)
-      }
-    },
-    [pushToast, sources],
-  )
-
-  useEffect(() => {
-    const bootstrap = async () => {
-      if (!isTauriRuntime()) {
-        setStatusLine('浏览器预览模式。运行 `npm run tauri dev` 以启用桌面功能。')
-        setSources([])
-        setBootstrapped(true)
-        setIsLoading(false)
-        return
-      }
-
-      try {
-        const defaultSources = await invoke<SourceConfig[]>('get_default_sources')
-        const resolvedSources = loadStoredSources(defaultSources)
-        setSources(resolvedSources)
-      } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : String(error))
-      } finally {
-        setBootstrapped(true)
-      }
-    }
-
-    void bootstrap()
-  }, [])
-
-  useEffect(() => {
-    if (!bootstrapped) return
-
-    persistSources(sources)
-    if (!isTauriRuntime()) return
-
-    void refreshSkills(sources)
-  }, [bootstrapped, refreshSkills, sources])
-
-  useEffect(() => {
-    sourcesRef.current = sources
-  }, [sources])
+  }, [browseMode, pushToast, refreshSkills, resetRecommendResults, sources, triggerExploreRefresh])
 
   useEffect(() => {
     persistActiveSource(activeSourceId)
@@ -443,43 +248,8 @@ function App() {
     if (count === 0) setActiveSourceId('all')
   }, [activeSourceId, browseMode, skills])
 
-  useEffect(() => {
-    if (!isTauriRuntime()) return
-
-    const setupListener = async () => {
-      const unlisten = await listen('refresh-requested', () => {
-        void refreshSkills(sourcesRef.current)
-      })
-      return unlisten
-    }
-
-    let cleanup: (() => void) | undefined
-    void setupListener().then((unlisten) => {
-      cleanup = unlisten
-    })
-
-    return () => cleanup?.()
-  }, [refreshSkills])
-
-  // Rescan when the window regains visibility (e.g. after adding skills in another app).
-  useEffect(() => {
-    if (!bootstrapped || !isTauriRuntime()) return
-
-    let wasHidden = document.visibilityState === 'hidden'
-
-    const onVisibility = () => {
-      const hidden = document.visibilityState === 'hidden'
-      if (wasHidden && !hidden) {
-        void refreshSkills(sourcesRef.current, undefined, true)
-      }
-      wasHidden = hidden
-    }
-
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => document.removeEventListener('visibilitychange', onVisibility)
-  }, [bootstrapped, refreshSkills])
-
   const deferredSearchValue = useDeferredValue(searchValue)
+  const searchTokens = useMemo(() => parseSearchQuery(deferredSearchValue), [deferredSearchValue])
 
   const collectionMemberCounts = useMemo(() => {
     const m: Record<string, number> = {}
@@ -497,6 +267,11 @@ function App() {
     return m
   }, [skills])
 
+  const enabledSourceCount = useMemo(
+    () => sources.filter((source) => source.enabled).length,
+    [sources],
+  )
+
   const exploreEntryBySkillId = useMemo(() => {
     const map = new Map<string, ExploreEntry>()
     for (const entry of exploreEntries) {
@@ -506,12 +281,12 @@ function App() {
   }, [exploreEntries])
 
   const visibleSkills = useMemo(() => {
-    const term = deferredSearchValue.trim().toLowerCase()
+    const matches = (searchIndex: string) => skillMatchesSearch(searchIndex, searchTokens)
 
     if (browseMode === 'recommend') {
       let list = recommendList
-      if (term) list = list.filter((s) => s.searchIndex.includes(term))
-      return list
+      if (searchTokens.length) list = list.filter((s) => matches(s.searchIndex))
+      return orderSkillsForSearch(list, searchTokens)
     }
 
     if (browseMode === 'explore') {
@@ -519,8 +294,9 @@ function App() {
         const loaded = exploreContentCache.get(entry.path)?.loaded
         return adaptExploreEntryToSkillRecord(entry, exploreRegistry, loaded)
       })
-      if (!term) return mapped
-      return mapped.filter((s) => s.searchIndex.includes(term))
+      let list = mapped
+      if (searchTokens.length) list = mapped.filter((s) => matches(s.searchIndex))
+      return orderSkillsForSearch(list, searchTokens)
     }
 
     if (browseMode === 'collections') {
@@ -531,29 +307,30 @@ function App() {
       const inCollection = filterSkillsForCollection(skills, members)
       const filtered = inCollection.filter((skill) => {
         if (showWritableOnly && !skill.writable) return false
-        if (!term) return true
-        return skill.searchIndex.includes(term)
+        if (!searchTokens.length) return true
+        return matches(skill.searchIndex)
       })
-      return mergeSkillsByContent(filtered)
+      return orderSkillsForSearch(mergeSkillsByContent(filtered), searchTokens)
     }
 
     const filtered = skills.filter((skill) => {
       if (showWritableOnly && !skill.writable) return false
       if (activeSourceId !== 'all' && skill.sourceId !== activeSourceId) return false
-      if (!term) return true
+      if (!searchTokens.length) return true
 
-      return skill.searchIndex.includes(term)
+      return matches(skill.searchIndex)
     })
 
-    // When showing all sources, merge identical skills (same name + content)
-    // that appear across multiple paths into a single entry.
-    return activeSourceId === 'all' ? mergeSkillsByContent(filtered) : filtered
+    // All sources mode: collapse same skill name across sources (body may still differ).
+    const mergedOrPlain =
+      activeSourceId === 'all' ? mergeSkillsByContent(filtered) : filtered
+    return orderSkillsForSearch(mergedOrPlain, searchTokens)
   }, [
     activeCollectionId,
     activeSourceId,
     browseMode,
     collectionsState,
-    deferredSearchValue,
+    searchTokens,
     exploreContentCache,
     exploreEntries,
     exploreRegistry,
@@ -571,6 +348,15 @@ function App() {
     return visibleSkills[0]?.id
   }, [selectedSkillId, visibleSkills])
 
+  const exploreRemoteBodyLoading = useMemo(() => {
+    if (browseMode !== 'explore') return false
+    const skill = visibleSkills.find((s) => s.id === effectiveSelectedSkillId)
+    if (!skill || skill.sourceKind !== 'explore') return false
+    const entry = exploreEntryBySkillId.get(skill.id)
+    if (!entry) return false
+    return exploreFetchPath === entry.path
+  }, [browseMode, effectiveSelectedSkillId, visibleSkills, exploreEntryBySkillId, exploreFetchPath])
+
   // Keep selectedSkillId state in sync after source/filter changes so that
   // user-initiated selections (clicks, keyboard) continue to work correctly.
   useEffect(() => {
@@ -578,6 +364,22 @@ function App() {
       setSelectedSkillId(effectiveSelectedSkillId)
     }
   }, [effectiveSelectedSkillId, selectedSkillId])
+
+  useEffect(() => {
+    if (browseMode !== 'explore' || !isTauriRuntime()) return
+    const skill = visibleSkills.find((s) => s.id === effectiveSelectedSkillId)
+    if (!skill || skill.sourceKind !== 'explore') return
+    const entry = exploreEntryBySkillId.get(skill.id)
+    if (!entry) return
+    void ensureExploreContent(exploreRegistry, entry)
+  }, [
+    browseMode,
+    effectiveSelectedSkillId,
+    exploreRegistry,
+    exploreEntryBySkillId,
+    ensureExploreContent,
+    visibleSkills,
+  ])
 
   useEffect(() => {
     const handleKeydown = (event: KeyboardEvent) => {
@@ -639,7 +441,7 @@ function App() {
       .then((content) => { if (!cancelled) setLoadedContent(content) })
       .catch((err) => { if (!cancelled) setErrorMessage(err instanceof Error ? err.message : String(err)) })
     return () => { cancelled = true }
-  }, [selectedSkillFile, selectedSkill?.sourceKind, refreshSeq])
+  }, [selectedSkillFile, selectedSkill?.sourceKind, refreshSeq, setErrorMessage])
 
   const previewRawContent = useMemo(() => {
     if (browseMode !== 'explore') return loadedContent
@@ -706,7 +508,7 @@ function App() {
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : String(error))
     }
-  }, [sources])
+  }, [sources, setErrorMessage, setStatusLine])
 
   const handleImportSourcesText = useCallback(async (json: string) => {
     if (!isTauriRuntime()) return
@@ -730,7 +532,7 @@ function App() {
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : String(error))
     }
-  }, [])
+  }, [setErrorMessage, setSources, setActiveSourceId, setStatusLine])
 
   const handleToggleSource = (sourceId: string) => {
     setSources((current) =>
@@ -1016,97 +818,45 @@ function App() {
             onRequestCreateFolder={openCreateFolderFromPreview}
             skillCountBySourceId={skillCountBySourceId}
             exploreMode={browseMode === 'explore'}
+            exploreRemoteLoading={browseMode === 'explore' && exploreRemoteBodyLoading}
             onInstall={
               browseMode === 'explore'
                 ? () => {
                     const entry = exploreEntries.find(
                       (e) => `${e.registryId}:${e.skillDir}/SKILL.md` === selectedSkill.id,
                     )
-                    if (entry) setInstallingEntry(entry)
+                    if (!entry) return
+                    void (async () => {
+                      try {
+                        await ensureExploreContent(exploreRegistry, entry)
+                        setInstallingEntry(entry)
+                      } catch {
+                        /* toast in ensureExploreContent */
+                      }
+                    })()
                   }
                 : undefined
             }
           />
         ) : null}
 
-        {/* Skills list */}
-        {browseMode === 'explore' ? (
-          isExploreLoading && visibleSkills.length === 0 ? (
-            <div className="tray-section">
-              <EmptyState
-                eyebrow={null}
-                title="正在加载探索仓库"
-              />
-            </div>
-          ) : visibleSkills.length > 0 ? (
-            <div className="tray-section">
-              <ExploreSkillList
-                skills={visibleSkills}
-                selectedSkillId={effectiveSelectedSkillId}
-                onSelectSkill={setSelectedSkillId}
-                isSearching={searchValue.trim() !== ''}
-              />
-            </div>
-          ) : (
-            <div className="tray-section">
-              <EmptyState
-                title="没有匹配的 skills"
-                description="切换分类或清空搜索；若列表为空请检查网络后点击刷新。"
-              />
-            </div>
-          )
-        ) : visibleSkills.length > 0 ? (
-          <SkillList
-            skills={visibleSkills}
-            selectedSkillId={effectiveSelectedSkillId}
-            onSelectSkill={setSelectedSkillId}
-            skillCountBySourceId={skillCountBySourceId}
-            recommendHintBySkillId={browseMode === 'recommend' ? recommendHintBySkillId : undefined}
-          />
-        ) : (
-          <div className="tray-section">
-            <EmptyState
-              className={
-                browseMode === 'recommend'
-                  ? 'empty-state--recommend'
-                  : browseMode === 'collections'
-                    ? 'empty-state--folder'
-                    : undefined
-              }
-              eyebrow={
-                browseMode === 'collections' && !activeCollectionId
-                  ? null
-                  : browseMode === 'recommend'
-                    ? null
-                    : undefined
-              }
-              title={
-                browseMode === 'recommend'
-                  ? recommendBusy
-                    ? '推荐中'
-                    : '暂无推荐'
-                  : browseMode === 'collections' && !activeCollectionId
-                    ? '请选择文件夹'
-                    : browseMode === 'collections' && activeCollectionId
-                      ? '该文件夹暂无 skill'
-                      : '没有匹配的 skills'
-              }
-              description={
-                browseMode === 'recommend'
-                  ? recommendBusy
-                    ? '正在匹配技能…'
-                    : '填写任务描述后点击「推荐」。'
-                  : browseMode === 'collections' && !activeCollectionId
-                    ? '在上方选择或新建；来源模式可勾选加入。'
-                    : browseMode === 'collections' && activeCollectionId
-                      ? '在预览勾选加入，或切至来源浏览全部。'
-                      : '尝试开启更多来源、清空搜索或新建 skill。'
-              }
-              actionLabel={browseMode === 'recommend' ? undefined : '新建 skill'}
-              onAction={browseMode === 'recommend' ? undefined : () => setEditorState({ mode: 'create' })}
-            />
-          </div>
-        )}
+        <TraySkillsPane
+          browseMode={browseMode}
+          visibleSkills={visibleSkills}
+          isExploreLoading={isExploreLoading}
+          exploreLoadError={exploreLoadError}
+          searchValue={searchValue}
+          enabledSourceCount={enabledSourceCount}
+          skillsTotal={skills.length}
+          isIndexing={isLoading}
+          effectiveSelectedSkillId={effectiveSelectedSkillId}
+          onSelectSkill={setSelectedSkillId}
+          skillCountBySourceId={skillCountBySourceId}
+          recommendHintBySkillId={recommendHintBySkillId}
+          activeCollectionId={activeCollectionId}
+          recommendBusy={recommendBusy}
+          onCreateSkill={() => setEditorState({ mode: 'create' })}
+        />
       </div>
 
       {/* Bottom status strip */}

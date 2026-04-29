@@ -1500,6 +1500,14 @@
   grid-column: 1 / -1;
 }
 
+.skill-drawer__merge-note {
+  grid-column: 1 / -1;
+  margin: 0 0 var(--space-sm);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
 .skill-drawer__merged-paths {
   display: flex;
   flex-direction: column;
@@ -1564,6 +1572,15 @@
 
 .skill-drawer__preview::-webkit-scrollbar-thumb:hover {
   background: var(--text-faint);
+}
+
+.skill-drawer__explore-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 /* ── Markdown Body ────────────────────────────────────────────── */

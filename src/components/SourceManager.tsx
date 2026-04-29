@@ -7,7 +7,7 @@ import { ExplorePanel } from './ExplorePanel'
 import { RecommendPanel, type RecommendRunPayload } from './RecommendPanel'
 import { FolderSelect } from './FolderSelect'
 import { getSourceBadge } from '../lib/sources'
-import type { ExploreContentLoadResult } from '../lib/explore'
+import type { ExploreIndexMeta } from '../lib/explore'
 import type { BrowseMode, ExploreEntry, ExploreRegistry, SourceConfig, SkillRecord } from '../types'
 import type { SkillCollection } from '../lib/collections'
 
@@ -35,11 +35,7 @@ interface SourceManagerProps {
   onRemoveSource: (sourceId: string) => void
   onExportSources?: () => void | Promise<void>
   onImportSourcesText?: (json: string) => void | Promise<void>
-  onExploreEntriesChange: (
-    entries: ExploreEntry[],
-    registry: ExploreRegistry,
-    contentResult: ExploreContentLoadResult,
-  ) => void
+  onExploreEntriesChange: (entries: ExploreEntry[], registry: ExploreRegistry, meta: ExploreIndexMeta) => void
   onExploreError: (msg: string) => void
   onExploreLoadingChange?: (loading: boolean) => void
   exploreRefreshKey?: number

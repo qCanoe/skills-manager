@@ -1,10 +1,11 @@
 import { useEffect, useId, useMemo, useRef, useState, useCallback } from 'react'
-import { ChevronDown, CopyPlus, Download, FolderOpen, FolderPlus, SquareArrowOutUpRight } from 'lucide-react'
+import { ChevronDown, CopyPlus, Download, FolderOpen, FolderPlus, LoaderCircle, SquareArrowOutUpRight } from 'lucide-react'
 
 import {
   displaySkillDescription,
   filterPathEntriesBySourceSkillCount,
   pathEntriesForSkill,
+  skillHasMergedAlternates,
 } from '../lib/skills'
 import { renderMarkdownToSafeHtml } from '../lib/render-markdown'
 import { SCROLLBAR_HIDE_DELAY_MS } from '../lib/ui-timing'
@@ -26,6 +27,8 @@ interface SkillPreviewProps {
   skillCountBySourceId: Record<string, number>
   /** Remote explore tab: hide local file actions, show install. */
   exploreMode?: boolean
+  /** Waiting on lazy-loaded SKILL.md from GitHub raw (explore tab). */
+  exploreRemoteLoading?: boolean
   onInstall?: () => void
 }
 
@@ -41,6 +44,7 @@ export function SkillPreview({
   onRequestCreateFolder,
   skillCountBySourceId,
   exploreMode = false,
+  exploreRemoteLoading = false,
   onInstall,
 }: SkillPreviewProps) {
   const [renderedMarkdown, setRenderedMarkdown] = useState({ source: '', html: '' })
@@ -264,6 +268,11 @@ export function SkillPreview({
                   </span>
                 )}
               </div>
+              {skillHasMergedAlternates(skill) && visiblePathEntries.length > 1 ? (
+                <p className="skill-drawer__merge-note" role="note">
+                  多源同名已合并为一行；各路径下的 SKILL.md 正文可能不一致。
+                </p>
+              ) : null}
               <div className="skill-drawer__meta-item">
                 <span className="skill-drawer__meta-label">命名空间</span>
                 <span className="skill-drawer__meta-value">{skill.namespace ?? '顶层'}</span>
@@ -284,10 +293,17 @@ export function SkillPreview({
               className={`skill-drawer__preview ${isScrolling ? 'is-scrolling' : ''}`}
               onScroll={handleScroll}
             >
-              <div
-                className={`md-body ${htmlReady ? 'md-body--ready' : ''}`}
-                dangerouslySetInnerHTML={{ __html: renderedHtml }}
-              />
+              {exploreMode && exploreRemoteLoading ? (
+                <div className="skill-drawer__explore-loading" aria-live="polite">
+                  <LoaderCircle className="spin" size={16} aria-hidden />
+                  <span>正在加载正文…</span>
+                </div>
+              ) : (
+                <div
+                  className={`md-body ${htmlReady ? 'md-body--ready' : ''}`}
+                  dangerouslySetInnerHTML={{ __html: renderedHtml }}
+                />
+              )}
             </div>
           </>
         )}

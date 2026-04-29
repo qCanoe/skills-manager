@@ -68,6 +68,14 @@ describe('BUILT_IN_REGISTRIES', () => {
     expect(sp?.skillsPath).toBe('skills')
   })
 
+  it('includes mattpocock/skills', () => {
+    const mp = BUILT_IN_REGISTRIES.find((r) => r.id === 'mattpocock-skills')
+    expect(mp).toBeDefined()
+    expect(mp?.owner).toBe('mattpocock')
+    expect(mp?.repo).toBe('skills')
+    expect(mp?.skillsPath).toBe('skills')
+  })
+
   it('includes garrytan/gstack with repo-root skill layout', () => {
     const gs = BUILT_IN_REGISTRIES.find((r) => r.id === 'garrytan-gstack')
     expect(gs).toBeDefined()
